@@ -1,0 +1,29 @@
+.firebase/
+node_modules/
+functions/node_modules/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+service-account*.json
+*-service-account*.json
+google-services.json
+GoogleService-Info.plist
+.DS_Store
+
+# Android build files
+android/.gradle/
+android/local.properties
+android/**/build/
+android/captures/
+android/.idea/
+
+# Logs and temporary files
+*.log
+firebase-debug.log*
+
+# Android project (temporarily excluded)
+/android/
+/app/
+/AndroidManifest.xml
