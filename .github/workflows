@@ -1,0 +1,26 @@
+Name: Deploy ORO-CONNECT to Firebase Hosting
+
+On:
+  Push:
+    Branches:
+-	Master
+    Paths:
+      - ‘Documents/ORO-CONNECT/**’
+      - ‘.github/workflows/firebase-hosting.yml’
+  Workflow_dispatch:
+
+Jobs:
+  Deploy:
+    Runs-on: ubuntu-latest
+    Steps:
+-	Name: Checkout repository
+        Uses: actions/checkout@v4
+
+-	Name: Deploy to Firebase Hosting
+        Uses: FirebaseExtended/action-hosting-deploy@v0
+        With:
+          firebaseServiceAccount: ‘${{ secrets.FIREBASE_SERVICE_ACCOUNT }}’
+          projectId: oro-connect-1f468
+          channelId: live
+          entryPoint: Documents/ORO-CONNECT
+
