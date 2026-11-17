@@ -1,5 +1,5 @@
 {
-  "id": "./",
+  "id": "/",
   "name": "ORO-CONNECT Social Platform",
   "short_name": "ORO-CONNECT",
   "description": "Hawaasa Oromoo walitti fiduuf kan qophaa'e miidiyaa hawaasaa haaraa.",
@@ -27,24 +27,13 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
-    },
-    {
-      "src": "./assets/img/icon-maskable-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
     }
   ],
   "shortcuts": [
     {
       "name": "Home",
       "short_name": "Home",
-      "url": "./index.html#home-section"
-    },
-    {
-      "name": "Messages",
-      "short_name": "Messages",
-      "url": "./index.html#messages-section"
+      "url": "./index.html"
     }
   ]
 }
