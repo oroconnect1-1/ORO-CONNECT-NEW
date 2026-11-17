@@ -1,13 +1,50 @@
 {
-  "background_color": "#ffffff",
-  "dir": "ltr",
-  "display": "standalone",
-  "name": "oroconnect1-1.github",
-  "orientation": "any",
+  "id": "/",
+  "name": "ORO-CONNECT Social Platform",
+  "short_name": "ORO-CONNECT",
+  "description": "Hawaasa Oromoo walitti fiduuf kan qophaa'e miidiyaa hawaasaa haaraa.",
+  "start_url": "/index.html",
   "scope": "/",
-  "short_name": "oroconnect1-1.github",
-  "start_url": "/",
-  "theme_color": "#ffffff",
-  "id": "com.oroconnect.pdfreader",
-  "description": "App social media ykn web yeroo jalqabaaf Afaan Oromootiin hojjetamee dha. Oromiyaa tti jalqabna addunyaa Oromoomsina!"
+  "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "background_color": "#ffffff",
+  "theme_color": "#da291c",
+  "orientation": "portrait",
+  "lang": "om-ET",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/assets/img/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/img/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/img/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Home",
+      "short_name": "Home",
+      "url": "/index.html#home-section"
+    },
+    {
+      "name": "Messages",
+      "short_name": "Messages",
+      "url": "/index.html#messages-section"
+    }
+  ]
 }
