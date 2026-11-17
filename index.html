@@ -70,7 +70,8 @@
     src="https://unpkg.com/@zegocloud/zego-uikit-prebuilt/zego-uikit-prebuilt.js"
     defer>
 </script>
-
+<!-- 1. Supabase Library Waamuu -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 @import url('./base/variables.css');
 @import url('./base/reset.css');
@@ -7694,7 +7695,40 @@ textarea:focus {
 </script>
 <script type="module">
     console.log("UI Global Scripts Loaded! ✅");
+ // ASITTI KEY KEE GALCHI 👇
+  const supabaseUrl = 'https://ojaqaottdprddruulien.supabase.co'; // Fakkeenyaaf: https://xyz.supabase.co
+  const supabaseKey = 'sb_publishable_R5gWnXmU8qgUUoCOMBav-w_bwJNSlXO'; // Key isa Publishable / Anon jedhu
 
+  const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
+
+  async function uploadMedia() {
+    const fileInput = document.getElementById('mediaFile');
+    const file = fileInput.files[0];
+    if (!file) {
+      alert('Maaloo dura suuraa ykn viidiyoo filadhu!');
+      return;
+    }
+
+    const fileName = `${Date.now()}_${file.name}`;
+    
+    // Gara Supabase Storage ('media' bucket) erguu
+    const { data, error } = await _supabase.storage
+      .from('media')
+      .upload(fileName, file);
+
+    if (error) {
+      alert('Dogoggorri uumameera: ' + error.message);
+    } else {
+      alert('Suuraan/Viidiyoonsa milkaa\'inaan fe\'ameera!');
+      
+      // Linkii suuraa/viidiyoo fe'amee argachuuf:
+      const { data: urlData } = _supabase.storage
+        .from('media')
+        .getPublicUrl(fileName);
+        
+      console.log('Linkii Faayilii:', urlData.publicUrl);
+    }
+  }
     // 1. Dropdown Handler
     window.toggleOptionsMenu = function(postId) {
         console.log("Dropdown tuqameera, ID:", postId);
