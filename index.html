@@ -13713,7 +13713,7 @@ window.handlePost = async () => {
     const textEl = document.getElementById("post-text");
     const fileInput = document.getElementById("media-upload");
 
-    let file = fileInput?.files?.[0];
+    let file = fileInput?.files?.[0] || null;
 
     const btn = document.getElementById("post-btn");
     const loader = document.getElementById("btn-loader");
@@ -13731,10 +13731,11 @@ window.handlePost = async () => {
     let finalType = "text";
 
     let activeUpload = null;
+    let uploadCancelled = false;
 
     const originalButtonText = btn?.innerText || "Post";
 
-    // Generate unique filename
+    // Create unique filename
     const createUniqueName = () => {
         return typeof crypto.randomUUID === "function"
             ? crypto.randomUUID()
@@ -13756,7 +13757,7 @@ window.handlePost = async () => {
         return extensions[mime] || mime.split("/")[1] || "bin";
     };
 
-    // Upload to Supabase with real progress and cancellation
+    // Upload to Supabase with progress and cancellation
     const uploadToSupabase = (blob, filePath, contentType) => {
 
         return new Promise((resolve, reject) => {
@@ -13766,37 +13767,24 @@ window.handlePost = async () => {
             activeUpload = xhr;
             window.currentUploadTask = xhr;
 
+            const encodedPath = filePath
+                .split("/")
+                .map(encodeURIComponent)
+                .join("/");
+
             const uploadURL =
                 `${supabaseUrl}/storage/v1/object/` +
-                `${encodeURIComponent(BUCKET)}/` +
-                filePath.split("/").map(encodeURIComponent).join("/");
+                `${encodeURIComponent(BUCKET)}/${encodedPath}`;
 
             xhr.open("POST", uploadURL, true);
 
-            xhr.setRequestHeader(
-                "apikey",
-                supabaseKey
-            );
+            xhr.setRequestHeader("apikey", supabaseKey);
 
-            xhr.setRequestHeader(
-                "Authorization",
-                "Bearer " + supabaseKey
-            );
+            xhr.setRequestHeader("Content-Type", contentType);
 
-            xhr.setRequestHeader(
-                "Content-Type",
-                contentType
-            );
+            xhr.setRequestHeader("Cache-Control", "3600");
 
-            xhr.setRequestHeader(
-                "Cache-Control",
-                "3600"
-            );
-
-            xhr.setRequestHeader(
-                "x-upsert",
-                "false"
-            );
+            xhr.setRequestHeader("x-upsert", "false");
 
             xhr.upload.onprogress = (event) => {
 
@@ -13831,7 +13819,16 @@ window.handlePost = async () => {
 
                 try {
                     response = JSON.parse(xhr.responseText);
-                } catch (_) {}
+                } catch (_) {
+                    response = {
+                        message: xhr.responseText
+                    };
+                }
+
+                console.log("[ORO-SUPABASE RESPONSE]", {
+                    status: xhr.status,
+                    response: response
+                });
 
                 if (xhr.status >= 200 && xhr.status < 300) {
 
@@ -13843,6 +13840,7 @@ window.handlePost = async () => {
                         new Error(
                             response.message ||
                             response.error ||
+                            response.statusCode ||
                             `Supabase upload failed: HTTP ${xhr.status}`
                         )
                     );
@@ -13852,6 +13850,7 @@ window.handlePost = async () => {
             xhr.onerror = () => {
 
                 activeUpload = null;
+                window.currentUploadTask = null;
 
                 reject(
                     new Error(
@@ -13863,6 +13862,7 @@ window.handlePost = async () => {
             xhr.onabort = () => {
 
                 activeUpload = null;
+                window.currentUploadTask = null;
 
                 const error = new Error("Upload cancelled.");
                 error.code = "storage/canceled";
@@ -13871,7 +13871,6 @@ window.handlePost = async () => {
             };
 
             xhr.send(blob);
-
         });
     };
 
@@ -13881,20 +13880,23 @@ window.handlePost = async () => {
         cancelBtn.onclick = () => {
 
             if (activeUpload) {
+                uploadCancelled = true;
                 activeUpload.abort();
             }
-
         };
     }
 
     const postText = textEl?.value?.trim() || "";
 
     if (!postText && !file) {
-        return alert("Waan tokko barreessi ykn suuraa/viidiyoo filadhu!");
+        return alert(
+            "Waan tokko barreessi ykn suuraa/viidiyoo filadhu!"
+        );
     }
 
     try {
 
+        // UI loading
         if (btn) {
             btn.disabled = true;
             btn.innerText = "Hojjechaa jira...";
@@ -13908,11 +13910,19 @@ window.handlePost = async () => {
             progressCont.style.display = file ? "block" : "none";
         }
 
+        if (progressBar) {
+            progressBar.style.width = "0%";
+        }
+
+        if (progressText) {
+            progressText.innerText = "0%";
+        }
+
         if (cancelBtn) {
             cancelBtn.style.display = file ? "inline-block" : "none";
         }
 
-        // 1. Validate selected media
+        // 1. Validate media
         if (file) {
 
             if (file.type.startsWith("video/")) {
@@ -13968,7 +13978,7 @@ window.handlePost = async () => {
                 );
             }
 
-            // 2. Prepare media path
+            // 2. Create media path
             const extension = getExtension(file.type);
 
             const uniqueName = createUniqueName();
@@ -13980,29 +13990,27 @@ window.handlePost = async () => {
                 btn.innerText = "Supabase irratti fe'aa jira...";
             }
 
-            // 3. Upload media to Supabase
-            const uploadResult = await uploadToSupabase(
+            // 3. Upload media
+            await uploadToSupabase(
                 file,
                 filePath,
                 file.type
             );
 
-            if (
-    !uploadResult ||
-    (!uploadResult.Key && !uploadResult.path)
-) {
-    throw new Error(
-        "Supabase upload response sirrii miti: " +
-        JSON.stringify(uploadResult)
-    );
-}
+            if (uploadCancelled) {
+                throw new Error("Upload cancelled.");
+            }
 
-            // 4. Get public media URL
-            const { data: publicData } =
+            // 4. Get public URL using known filePath
+            const { data: publicData, error: publicError } =
                 supabaseClient
                     .storage
                     .from(BUCKET)
-                    .getPublicUrl(uploadResult.path);
+                    .getPublicUrl(filePath);
+
+            if (publicError) {
+                throw publicError;
+            }
 
             if (!publicData?.publicUrl) {
                 throw new Error(
@@ -14012,7 +14020,7 @@ window.handlePost = async () => {
 
             mediaUrl = publicData.publicUrl;
 
-            // 5. Generate and upload video thumbnail
+            // 5. Generate video thumbnail
             if (
                 finalType === "video" &&
                 typeof generateVideoThumbnail === "function"
@@ -14029,24 +14037,25 @@ window.handlePost = async () => {
                             `thumbnails/${user.uid}/` +
                             `${createUniqueName()}.jpg`;
 
-                        const thumbResult =
-                            await uploadToSupabase(
-                                thumbBlob,
-                                thumbPath,
-                                "image/jpeg"
-                            );
+                        await uploadToSupabase(
+                            thumbBlob,
+                            thumbPath,
+                            "image/jpeg"
+                        );
 
-                        if (thumbResult) {
-    const { data: thumbPublicData } =
-    supabaseClient
-        .storage
-        .from(BUCKET)
-        .getPublicUrl(thumbPath);
-    
-    thumbnailUrl =
-        thumbPublicData?.publicUrl || "";
-}
-}
+                        if (!uploadCancelled) {
+
+                            const { data: thumbPublicData } =
+                                supabaseClient
+                                    .storage
+                                    .from(BUCKET)
+                                    .getPublicUrl(thumbPath);
+
+                            thumbnailUrl =
+                                thumbPublicData?.publicUrl || "";
+                        }
+                    }
+
                 } catch (thumbError) {
 
                     console.error(
@@ -14057,7 +14066,11 @@ window.handlePost = async () => {
             }
         }
 
-        // 6. Save post information to Firebase Firestore
+        if (uploadCancelled) {
+            throw new Error("Upload cancelled.");
+        }
+
+        // 6. Save post information to Firestore
         await saveToFirestore(
             postText,
             mediaUrl,
@@ -14114,6 +14127,10 @@ window.handlePost = async () => {
 
         if (cancelBtn) {
             cancelBtn.style.display = "none";
+        }
+
+        if (progressCont) {
+            progressCont.style.display = "none";
         }
     }
 };
