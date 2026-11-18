@@ -20437,20 +20437,278 @@ window.updateFullProfile = async function () {
         }
 
         if (photoURL) {
+window.updateFullProfile = async function () {
+    const user = auth.currentUser;
+
+    if (!user) {
+        alert("Maaloo dura seeni!");
+        return;
+    }
+
+    // Check Supabase connection
+    if (
+    typeof _supabase === "undefined" ||
+    !_supabase
+) {
+    alert("Supabase connection hin argamne!");
+    return;
+}
+
+    const fileInput = document.getElementById("upload-photo");
+    const nameEl = document.getElementById("update-name-input");
+    const usernameEl = document.getElementById("update-username-input");
+
+    const bioEl =
+        document.getElementById("update-bio-input") ||
+        document.querySelector('textarea[placeholder*="Waa\'ee kee"]');
+
+    const locEl =
+        document.getElementById("update-location-input") ||
+        document.querySelector('input[placeholder*="Finfinnee"]');
+
+    const btn = document.getElementById("save-profile-btn");
+
+    const originalButtonText =
+        btn?.textContent || "Update";
+
+    const userRef = doc(db, "users", user.uid);
+
+    let uploadedPhotoURL = "";
+    let oldData = {};
+
+    try {
+        if (btn) {
+            if (btn.disabled) return;
+
+            btn.disabled = true;
+            btn.textContent = "Haaromsaa jira... ⏳";
+        }
+
+        // 1. Read existing Firestore profile
+        const oldSnap = await getDoc(userRef);
+
+        oldData = oldSnap.exists()
+            ? oldSnap.data()
+            : {};
+
+        // 2. Read profile information
+        const nameProvided =
+            !!nameEl && nameEl.value.trim() !== "";
+
+        const usernameProvided =
+            !!usernameEl && usernameEl.value.trim() !== "";
+
+        const newName = nameProvided
+            ? nameEl.value.trim()
+            : String(
+                oldData.name ||
+                oldData.displayName ||
+                user.displayName ||
+                ""
+            ).trim();
+
+        const newUsername = usernameProvided
+            ? usernameEl.value.trim().toLowerCase()
+            : String(
+                oldData.userNameLower ||
+                oldData.userName ||
+                ""
+            ).trim().toLowerCase();
+
+        const bio = bioEl
+            ? bioEl.value.trim()
+            : String(oldData.bio || "");
+
+        const userLocation = locEl
+            ? locEl.value.trim()
+            : String(oldData.location || "");
+
+        // 3. Validate profile information
+        if (!newName) {
+            throw new Error("Maaloo maqaa kee galchi!");
+        }
+
+        if (newName.length > 100) {
+            throw new Error(
+                "Maqaan kee qubee 100 caaluu hin qabu."
+            );
+        }
+
+        if (bio.length > 1000) {
+            throw new Error(
+                "Ibsi waa'ee kee qubee 1000 caaluu hin qabu."
+            );
+        }
+
+        if (userLocation.length > 150) {
+            throw new Error(
+                "Bakka jiraattuu qubee 150 caaluu hin qabu."
+            );
+        }
+
+        // 4. Validate username
+        if (usernameProvided) {
+
+            if (!/^[a-zA-Z0-9_]{3,15}$/.test(newUsername)) {
+                throw new Error(
+                    "Username qubee, lakkoofsa fi (_) qofa qabaachuu qaba (3-15)."
+                );
+            }
+
+            const usernameQuery = query(
+                collection(db, "users"),
+                where("userNameLower", "==", newUsername),
+                limit(10)
+            );
+
+            const usernameSnap = await getDocs(usernameQuery);
+
+            const taken = usernameSnap.docs.some(
+                item => item.id !== user.uid
+            );
+
+            if (taken) {
+                throw new Error(
+                    "Username kun nama biraatiin fudhatameera."
+                );
+            }
+        }
+
+        // 5. Keep existing profile photo URL
+        let photoURL = String(
+            oldData.photoURL ||
+            oldData.userPic ||
+            user.photoURL ||
+            ""
+        );
+
+        // 6. Upload new profile photo to Supabase
+        const file = fileInput?.files?.[0];
+
+        if (file) {
+
+            const allowedTypes = [
+                "image/jpeg",
+                "image/png",
+                "image/webp"
+            ];
+
+            if (!allowedTypes.includes(file.type)) {
+                throw new Error(
+                    "JPEG, PNG ykn WebP qofa fayyadami."
+                );
+            }
+
+            if (file.size > 5 * 1024 * 1024) {
+                throw new Error(
+                    "Suuraan 5MB ol ta'uu hin qabu!"
+                );
+            }
+
+            if (btn) {
+                btn.textContent =
+                    "Suuraa Supabase irratti fe'aa jira... 0%";
+            }
+
+            const extension = file.type === "image/jpeg"
+                ? "jpg"
+                : file.type.split("/")[1];
+
+            const uniqueName =
+                typeof crypto.randomUUID === "function"
+                    ? crypto.randomUUID()
+                    : Date.now() + "_" + Math.random().toString(36).slice(2);
+
+            const filePath =
+                `${user.uid}/${uniqueName}.${extension}`;
+
+            // Upload to Supabase Storage bucket: media
+            const { data, error } = await _supabase
+    .storage
+    .from("media")
+    .upload(filePath, file, {
+        cacheControl: "3600",
+        contentType: file.type,
+        upsert: false
+    });
+
+            if (error) {
+                throw new Error(
+                    "Supabase upload failed: " + error.message
+                );
+            }
+
+            if (!data || !data.path) {
+                throw new Error(
+                    "URL suuraa Supabase irraa hin argamne."
+                );
+            }
+
+            // Get public URL
+            const { data: publicData } = _supabase
+    .storage
+    .from("media")
+    .getPublicUrl(data.path);
+
+            if (!publicData?.publicUrl) {
+                throw new Error(
+                    "Public URL suuraa argachuun hin milkoofne."
+                );
+            }
+
+            uploadedPhotoURL = publicData.publicUrl;
+
+            photoURL = uploadedPhotoURL;
+        }
+
+        // 7. Update Firebase Authentication profile
+        const authUpdates = {};
+
+        if (newName !== (user.displayName || "")) {
+            authUpdates.displayName = newName;
+        }
+
+        if (photoURL && photoURL !== (user.photoURL || "")) {
+            authUpdates.photoURL = photoURL;
+        }
+
+        if (Object.keys(authUpdates).length > 0) {
+            await updateProfile(user, authUpdates);
+        }
+
+        // 8. Prepare Firestore updates
+        const updates = {
+            name: newName,
+            displayName: newName,
+            bio: bio,
+            location: userLocation,
+            updatedAt: serverTimestamp()
+        };
+
+        if (usernameProvided) {
+            updates.userName = newUsername;
+            updates.userNameLower = newUsername;
+        }
+
+        if (photoURL) {
             updates.photoURL = photoURL;
             updates.userPic = photoURL;
         }
 
+        // 9. Save profile to Firestore
         if (oldSnap.exists()) {
+
             await updateDoc(userRef, updates);
+
         } else {
+
             await setDoc(
                 userRef,
                 {
                     ...updates,
                     uid: user.uid,
                     email: user.email || "",
-                    userName: newUsername || newName || "Fayyadamaa",
+                    userName: newUsername || newName,
                     userNameLower: newUsername || "",
                     followers: [],
                     following: [],
@@ -20462,34 +20720,66 @@ window.updateFullProfile = async function () {
             );
         }
 
-        // Refresh visible profile images.
+        // 10. Refresh profile images
         if (photoURL) {
-            [
+
+            const imageIds = [
                 "profile-img",
                 "user-prof-pic",
                 "my-prof-pic",
                 "view-user-pic"
-            ].forEach(id => {
+            ];
+
+            const cacheBustedURL =
+                photoURL +
+                (photoURL.includes("?") ? "&" : "?") +
+                "v=" + Date.now();
+
+            imageIds.forEach(id => {
+
                 const img = document.getElementById(id);
-                if (img) img.src = photoURL;
+
+                if (img) {
+                    img.src = cacheBustedURL;
+                }
+
             });
+
+            // Also refresh images marked with data-profile-image
+            document
+                .querySelectorAll("[data-profile-image]")
+                .forEach(img => {
+                    img.src = cacheBustedURL;
+                });
         }
 
-        // Refresh visible profile name if matching elements exist.
+        // 11. Refresh profile names
         [
             "profile-name",
             "user-profile-name",
             "my-profile-name"
         ].forEach(id => {
+
             const el = document.getElementById(id);
-            if (el && newName) el.textContent = newName;
+
+            if (el) {
+                el.textContent = newName;
+            }
+
         });
 
-        if (fileInput) fileInput.value = "";
+        // 12. Clear selected file
+        if (fileInput) {
+            fileInput.value = "";
+        }
 
-        alert("Odeeffannoon piroofaayilii milkaa'inaan haaromfame! ✅");
+        // 13. Success
+        alert(
+            "Odeeffannoon piroofaayilii milkaa'inaan haaromfame! ✅"
+        );
 
     } catch (err) {
+
         console.error(
             "PROFILE UPDATE ERROR:",
             err?.code || "unknown",
@@ -20504,14 +20794,14 @@ window.updateFullProfile = async function () {
         );
 
     } finally {
+
         if (btn) {
             btn.disabled = false;
             btn.textContent = originalButtonText;
         }
+
     }
 };
-
-
 // ============================================
 // PROFILE AVATAR PREVIEW
 // ============================================
