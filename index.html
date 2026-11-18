@@ -12906,6 +12906,51 @@ window.OROAuthController ||= (() => {
         destroy
     });
 })();
+    window.uploadMedia = async function () {
+
+    const fileInput = document.getElementById('mediaFile');
+
+    if (!fileInput || !fileInput.files.length) {
+        alert('Maaloo dura suuraa ykn viidiyoo filadhu!');
+        return;
+    }
+
+    const file = fileInput.files[0];
+
+    const fileName = `${Date.now()}_${file.name}`;
+
+    try {
+
+        // Upload to Supabase Storage
+        const { data, error } = await _supabase.storage
+            .from('media')
+            .upload(fileName, file);
+
+        if (error) {
+            throw error;
+        }
+
+        // Get Public URL
+        const { data: urlData } = _supabase.storage
+            .from('media')
+            .getPublicUrl(fileName);
+
+        console.log('Uploaded Media:', data);
+        console.log('Media URL:', urlData.publicUrl);
+
+        alert('Faayiliin milkaa\'inaan fe\'ameera!');
+
+        return urlData.publicUrl;
+
+    } catch (error) {
+
+        console.error('Supabase Upload Error:', error);
+
+        alert('Dogoggorri uumameera: ' + error.message);
+
+        return null;
+    }
+};
 window.handleGoogleLogin = async function() {
     try {
         const isNative = typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform();
