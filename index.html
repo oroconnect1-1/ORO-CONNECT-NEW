@@ -7696,39 +7696,41 @@ textarea:focus {
 <script type="module">
     console.log("UI Global Scripts Loaded! ✅");
  // ASITTI KEY KEE GALCHI 👇
-  const supabaseUrl = 'https://ojaqaottdprddruulien.supabase.co'; // Fakkeenyaaf: https://xyz.supabase.co
-  const supabaseKey = 'sb_publishable_R5gWnXmU8qgUUoCOMBav-w_bwJNSlXO'; // Key isa Publishable / Anon jedhu
+  const supabaseUrl = 'https://ojaqaottdprddruulien.supabase.co';
+const supabaseUrl = 'https://ojaqaottdprddruulien.supabase.co';
+  const supabaseKey = 'sb_publishable_R5gWnXmU8qgUUoCOMBav-w_bwJNSlXO';
 
   const _supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
-  async function uploadMedia() {
+  window.uploadMedia = async function () {
     const fileInput = document.getElementById('mediaFile');
-    const file = fileInput.files[0];
-    if (!file) {
-      alert('Maaloo dura suuraa ykn viidiyoo filadhu!');
-      return;
+
+    if (!fileInput || !fileInput.files.length) {
+        alert('Maaloo dura suuraa ykn viidiyoo filadhu!');
+        return;
     }
 
+    const file = fileInput.files[0];
     const fileName = `${Date.now()}_${file.name}`;
-    
-    // Gara Supabase Storage ('media' bucket) erguu
+
     const { data, error } = await _supabase.storage
-      .from('media')
-      .upload(fileName, file);
+        .from('media')
+        .upload(fileName, file);
 
     if (error) {
-      alert('Dogoggorri uumameera: ' + error.message);
-    } else {
-      alert('Suuraan/Viidiyoonsa milkaa\'inaan fe\'ameera!');
-      
-      // Linkii suuraa/viidiyoo fe'amee argachuuf:
-      const { data: urlData } = _supabase.storage
+        alert('Dogoggorri uumameera: ' + error.message);
+        console.error(error);
+        return;
+    }
+
+    const { data: urlData } = _supabase.storage
         .from('media')
         .getPublicUrl(fileName);
-        
-      console.log('Linkii Faayilii:', urlData.publicUrl);
-    }
-  }
+
+    console.log('Media URL:', urlData.publicUrl);
+
+    alert('Faayiliin milkaainaan fe’ameera!');
+};
     // 1. Dropdown Handler
     window.toggleOptionsMenu = function(postId) {
         console.log("Dropdown tuqameera, ID:", postId);
