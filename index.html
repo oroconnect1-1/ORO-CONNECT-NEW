@@ -20197,6 +20197,7 @@ window.toggleBlockedList = () => {
 };
 
 window.updateFullProfile = async function () {
+
     const user = auth.currentUser;
 
     if (!user) {
@@ -20221,21 +20222,20 @@ window.updateFullProfile = async function () {
 
     const userRef = doc(db, "users", user.uid);
 
-    let uploadTask = null;
-    let uploadedPhotoURL = "";
-    let oldData = {};
-
     try {
+
         if (btn) {
             if (btn.disabled) return;
+
             btn.disabled = true;
             btn.textContent = "Haaromsaa jira... ⏳";
         }
 
-        // Read current profile.
+        // 1. Read existing profile
         const oldSnap = await getDoc(userRef);
-        oldData = oldSnap.exists() ? oldSnap.data() : {};
+        const oldData = oldSnap.exists() ? oldSnap.data() : {};
 
+        // 2. Read form values
         const nameProvided =
             !!nameEl && nameEl.value.trim() !== "";
 
@@ -20267,286 +20267,24 @@ window.updateFullProfile = async function () {
             ? locEl.value.trim()
             : String(oldData.location || "");
 
-        // Validate name.
-        if (nameProvided && !newName) {
-            throw new Error("Maaloo maqaa sirrii galchi!");
-        }
-
-        if (newName.length > 100) {
-            throw new Error("Maqaan kee qubee 100 caaluu hin qabu.");
-        }
-
-        if (bio.length > 1000) {
-            throw new Error("Ibsi waa'ee kee qubee 1000 caaluu hin qabu.");
-        }
-
-        if (userLocation.length > 150) {
-            throw new Error("Bakka jiraattuu qubee 150 caaluu hin qabu.");
-        }
-
-        // Validate username.
-        if (usernameProvided) {
-            if (!/^[a-zA-Z0-9_]{3,15}$/.test(newUsername)) {
-                throw new Error(
-                    "Username qubee, lakkoofsa fi (_) qofa qabaachuu qaba (3-15)."
-                );
-            }
-
-            const usernameQuery = query(
-                collection(db, "users"),
-                where("userNameLower", "==", newUsername),
-                limit(10)
-            );
-
-            const usernameSnap = await getDocs(usernameQuery);
-
-            const taken = usernameSnap.docs.some(
-                item => item.id !== user.uid
-            );
-
-            if (taken) {
-                throw new Error(
-                    "Username kun nama biraatiin fudhatameera. Kan biraa yaali."
-                );
-            }
-
-            // NOTE:
-            // This query alone cannot guarantee uniqueness against
-            // simultaneous requests or legacy documents missing
-            // userNameLower. Enforce uniqueness server-side too.
-        }
-
-        let photoURL = String(
-            oldData.photoURL ||
-            oldData.userPic ||
-            user.photoURL ||
-            ""
-        );
-
-        // Upload a new profile photo if selected.
-        const file = fileInput?.files?.[0];
-
-        if (file) {
-            if (!file.type || !file.type.startsWith("image/")) {
-                throw new Error("Maaloo faayila suuraa qofa filadhu!");
-            }
-
-            if (file.size > 5 * 1024 * 1024) {
-                throw new Error("Suuraan 5MB ol ta'uu hin qabu!");
-            }
-
-            const allowedTypes = [
-                "image/jpeg",
-                "image/png",
-                "image/webp"
-            ];
-
-            if (!allowedTypes.includes(file.type)) {
-                throw new Error(
-                    "JPEG, PNG ykn WebP qofa fayyadami."
-                );
-            }
-
-            const photoRef = ref(
-                storage,
-                `profiles/${user.uid}/profile_${Date.now()}`
-            );
-
-            uploadTask = uploadBytesResumable(
-                photoRef,
-                file,
-                { contentType: file.type }
-            );
-
-            const uploadResult = await new Promise(
-                (resolve, reject) => {
-                    let settled = false;
-
-                    const finish = (callback, value) => {
-                        if (settled) return;
-                        settled = true;
-                        clearTimeout(timeoutId);
-                        callback(value);
-                    };
-
-                    const timeoutId = setTimeout(() => {
-                        try {
-                            uploadTask.cancel();
-                        } catch (_) {}
-
-                        finish(
-                            reject,
-                            new Error(
-                                "Suuraa olkaa'uun yeroo dheeraa fudhate. Internetii fi Firebase Storage Rules ilaali."
-                            )
-                        );
-                    }, 30000);
-
-                    uploadTask.on(
-                        "state_changed",
-                        snapshot => {
-                            if (btn) {
-                                const percent = Math.round(
-                                    (
-                                        snapshot.bytesTransferred /
-                                        Math.max(snapshot.totalBytes, 1)
-                                    ) * 100
-                                );
-
-                                btn.textContent =
-                                    `Suuraa olkaa'aa jira... ${percent}%`;
-                            }
-                        },
-                        error => finish(reject, error),
-                        () => finish(resolve, uploadTask.snapshot)
-                    );
-                }
-            );
-
-            uploadedPhotoURL = await getDownloadURL(uploadResult.ref);
-            photoURL = uploadedPhotoURL;
-        }
-
-        // Update Firebase Authentication profile.
-        const authUpdates = {};
-
-        if (newName && newName !== (user.displayName || "")) {
-            authUpdates.displayName = newName;
-        }
-
-        if (photoURL && photoURL !== (user.photoURL || "")) {
-            authUpdates.photoURL = photoURL;
-        }
-
-        if (Object.keys(authUpdates).length > 0) {
-            await updateProfile(user, authUpdates);
-        }
-
-        // Prepare Firestore profile updates.
-        const updates = {
-            name: newName,
-            displayName: newName,
-            bio,
-            location: userLocation,
-            updatedAt: serverTimestamp()
-        };
-
-        if (usernameProvided) {
-            updates.userName = newUsername;
-            updates.userNameLower = newUsername;
-        }
-
-        if (photoURL) {
-window.updateFullProfile = async function () {
-    const user = auth.currentUser;
-
-    if (!user) {
-        alert("Maaloo dura seeni!");
-        return;
-    }
-
-    // Check Supabase connection
-    if (
-    typeof _supabase === "undefined" ||
-    !_supabase
-) {
-    alert("Supabase connection hin argamne!");
-    return;
-}
-
-    const fileInput = document.getElementById("upload-photo");
-    const nameEl = document.getElementById("update-name-input");
-    const usernameEl = document.getElementById("update-username-input");
-
-    const bioEl =
-        document.getElementById("update-bio-input") ||
-        document.querySelector('textarea[placeholder*="Waa\'ee kee"]');
-
-    const locEl =
-        document.getElementById("update-location-input") ||
-        document.querySelector('input[placeholder*="Finfinnee"]');
-
-    const btn = document.getElementById("save-profile-btn");
-
-    const originalButtonText =
-        btn?.textContent || "Update";
-
-    const userRef = doc(db, "users", user.uid);
-
-    let uploadedPhotoURL = "";
-    let oldData = {};
-
-    try {
-        if (btn) {
-            if (btn.disabled) return;
-
-            btn.disabled = true;
-            btn.textContent = "Haaromsaa jira... ⏳";
-        }
-
-        // 1. Read existing Firestore profile
-        const oldSnap = await getDoc(userRef);
-
-        oldData = oldSnap.exists()
-            ? oldSnap.data()
-            : {};
-
-        // 2. Read profile information
-        const nameProvided =
-            !!nameEl && nameEl.value.trim() !== "";
-
-        const usernameProvided =
-            !!usernameEl && usernameEl.value.trim() !== "";
-
-        const newName = nameProvided
-            ? nameEl.value.trim()
-            : String(
-                oldData.name ||
-                oldData.displayName ||
-                user.displayName ||
-                ""
-            ).trim();
-
-        const newUsername = usernameProvided
-            ? usernameEl.value.trim().toLowerCase()
-            : String(
-                oldData.userNameLower ||
-                oldData.userName ||
-                ""
-            ).trim().toLowerCase();
-
-        const bio = bioEl
-            ? bioEl.value.trim()
-            : String(oldData.bio || "");
-
-        const userLocation = locEl
-            ? locEl.value.trim()
-            : String(oldData.location || "");
-
-        // 3. Validate profile information
+        // 3. Validation
         if (!newName) {
             throw new Error("Maaloo maqaa kee galchi!");
         }
 
         if (newName.length > 100) {
-            throw new Error(
-                "Maqaan kee qubee 100 caaluu hin qabu."
-            );
+            throw new Error("Maqaan qubee 100 caaluu hin qabu.");
         }
 
         if (bio.length > 1000) {
-            throw new Error(
-                "Ibsi waa'ee kee qubee 1000 caaluu hin qabu."
-            );
+            throw new Error("Bio qubee 1000 caaluu hin qabu.");
         }
 
         if (userLocation.length > 150) {
-            throw new Error(
-                "Bakka jiraattuu qubee 150 caaluu hin qabu."
-            );
+            throw new Error("Location qubee 150 caaluu hin qabu.");
         }
 
-        // 4. Validate username
+        // 4. Username validation
         if (usernameProvided) {
 
             if (!/^[a-zA-Z0-9_]{3,15}$/.test(newUsername)) {
@@ -20574,7 +20312,7 @@ window.updateFullProfile = async function () {
             }
         }
 
-        // 5. Keep existing profile photo URL
+        // 5. Existing photo URL
         let photoURL = String(
             oldData.photoURL ||
             oldData.userPic ||
@@ -20582,10 +20320,19 @@ window.updateFullProfile = async function () {
             ""
         );
 
-        // 6. Upload new profile photo to Supabase
+        // 6. Supabase profile photo upload
         const file = fileInput?.files?.[0];
 
         if (file) {
+
+            if (
+                typeof supabaseClient === "undefined" ||
+                !supabaseClient
+            ) {
+                throw new Error(
+                    "Supabase connection hin argamne!"
+                );
+            }
 
             const allowedTypes = [
                 "image/jpeg",
@@ -20607,61 +20354,62 @@ window.updateFullProfile = async function () {
 
             if (btn) {
                 btn.textContent =
-                    "Suuraa Supabase irratti fe'aa jira... 0%";
+                    "Suuraa fe'aa jira... ⏳";
             }
 
-            const extension = file.type === "image/jpeg"
-                ? "jpg"
-                : file.type.split("/")[1];
+            const extension = {
+                "image/jpeg": "jpg",
+                "image/png": "png",
+                "image/webp": "webp"
+            }[file.type];
 
             const uniqueName =
                 typeof crypto.randomUUID === "function"
                     ? crypto.randomUUID()
-                    : Date.now() + "_" + Math.random().toString(36).slice(2);
+                    : Date.now() + "_" +
+                      Math.random().toString(36).slice(2);
 
             const filePath =
                 `${user.uid}/${uniqueName}.${extension}`;
 
-            // Upload to Supabase Storage bucket: media
-            const { data, error } = await _supabase
-    .storage
-    .from("media")
-    .upload(filePath, file, {
-        cacheControl: "3600",
-        contentType: file.type,
-        upsert: false
-    });
+            const { data, error } = await supabaseClient
+                .storage
+                .from("media")
+                .upload(filePath, file, {
+                    cacheControl: "3600",
+                    contentType: file.type,
+                    upsert: false
+                });
 
             if (error) {
                 throw new Error(
-                    "Supabase upload failed: " + error.message
+                    "Supabase upload: " + error.message
                 );
             }
 
-            if (!data || !data.path) {
+            if (!data?.path) {
                 throw new Error(
-                    "URL suuraa Supabase irraa hin argamne."
+                    "Suuraa Supabase keessatti olkaa'uun hin milkoofne."
                 );
             }
 
             // Get public URL
-            const { data: publicData } = _supabase
-    .storage
-    .from("media")
-    .getPublicUrl(data.path);
+            const { data: publicData } =
+                supabaseClient
+                    .storage
+                    .from("media")
+                    .getPublicUrl(data.path);
 
             if (!publicData?.publicUrl) {
                 throw new Error(
-                    "Public URL suuraa argachuun hin milkoofne."
+                    "Public URL suuraa hin argamne."
                 );
             }
 
-            uploadedPhotoURL = publicData.publicUrl;
-
-            photoURL = uploadedPhotoURL;
+            photoURL = publicData.publicUrl;
         }
 
-        // 7. Update Firebase Authentication profile
+        // 7. Update Firebase Authentication
         const authUpdates = {};
 
         if (newName !== (user.displayName || "")) {
@@ -20695,33 +20443,35 @@ window.updateFullProfile = async function () {
             updates.userPic = photoURL;
         }
 
-        // 9. Save profile to Firestore
+        // 9. Save Firestore
         if (oldSnap.exists()) {
 
             await updateDoc(userRef, updates);
 
         } else {
 
-            await setDoc(
-                userRef,
-                {
-                    ...updates,
-                    uid: user.uid,
-                    email: user.email || "",
-                    userName: newUsername || newName,
-                    userNameLower: newUsername || "",
-                    followers: [],
-                    following: [],
-                    followersCount: 0,
-                    followingCount: 0,
-                    createdAt: serverTimestamp()
-                },
-                { merge: true }
-            );
+            await setDoc(userRef, {
+                ...updates,
+                uid: user.uid,
+                email: user.email || "",
+                userName: newUsername || newName,
+                userNameLower: newUsername || "",
+                followers: [],
+                following: [],
+                followersCount: 0,
+                followingCount: 0,
+                createdAt: serverTimestamp()
+            }, { merge: true });
+
         }
 
-        // 10. Refresh profile images
+        // 10. Refresh all known profile images
         if (photoURL) {
+
+            const cacheURL =
+                photoURL +
+                (photoURL.includes("?") ? "&" : "?") +
+                "v=" + Date.now();
 
             const imageIds = [
                 "profile-img",
@@ -20730,26 +20480,20 @@ window.updateFullProfile = async function () {
                 "view-user-pic"
             ];
 
-            const cacheBustedURL =
-                photoURL +
-                (photoURL.includes("?") ? "&" : "?") +
-                "v=" + Date.now();
-
             imageIds.forEach(id => {
 
                 const img = document.getElementById(id);
 
                 if (img) {
-                    img.src = cacheBustedURL;
+                    img.src = cacheURL;
                 }
 
             });
 
-            // Also refresh images marked with data-profile-image
             document
                 .querySelectorAll("[data-profile-image]")
                 .forEach(img => {
-                    img.src = cacheBustedURL;
+                    img.src = cacheURL;
                 });
         }
 
@@ -20773,7 +20517,6 @@ window.updateFullProfile = async function () {
             fileInput.value = "";
         }
 
-        // 13. Success
         alert(
             "Odeeffannoon piroofaayilii milkaa'inaan haaromfame! ✅"
         );
@@ -20781,15 +20524,13 @@ window.updateFullProfile = async function () {
     } catch (err) {
 
         console.error(
-            "PROFILE UPDATE ERROR:",
-            err?.code || "unknown",
-            err?.message || err
+            "[ORO-PROFILE] UPDATE ERROR:",
+            err
         );
 
         alert(
             "Profile haaromsuun hin milkoofne!\n\n" +
-            "Code: " + (err?.code || "unknown") +
-            "\nSababa: " +
+            "Sababa: " +
             (err?.message || "Dogoggora hin beekamne.")
         );
 
