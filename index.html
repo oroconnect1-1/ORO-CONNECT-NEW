@@ -20373,13 +20373,13 @@ window.updateFullProfile = async function () {
                 `${user.uid}/${uniqueName}.${extension}`;
 
             const { data, error } = await supabaseClient
-                .storage
-                .from("media")
-                .upload(filePath, file, {
-                    cacheControl: "3600",
-                    contentType: file.type,
-                    upsert: false
-                });
+    .storage
+    .from("Oro-image")
+    .upload(filePath, file, {
+        cacheControl: "3600",
+        contentType: file.type,
+        upsert: false
+    });
 
             if (error) {
                 throw new Error(
@@ -20395,10 +20395,10 @@ window.updateFullProfile = async function () {
 
             // Get public URL
             const { data: publicData } =
-                supabaseClient
-                    .storage
-                    .from("media")
-                    .getPublicUrl(data.path);
+supabaseClient
+    .storage
+    .from("Oro-image")
+    .getPublicUrl(data.path);
 
             if (!publicData?.publicUrl) {
                 throw new Error(
