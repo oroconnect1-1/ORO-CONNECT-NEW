@@ -13696,79 +13696,423 @@ window.loadMorePosts = async function () {
 };
 let currentUploadTask = null;
 window.handlePost = async () => {
-    const text = document.getElementById('post-text').value;
-    const fileInput = document.getElementById('media-upload');
-    let file = fileInput.files[0];
-    const btn = document.getElementById('post-btn');
-    const loader = document.getElementById('btn-loader');
-    const progressCont = document.getElementById('upload-progress-container');
-    const progressBar = document.getElementById('upload-progress-bar');
-    const progressText = document.getElementById('progress-percent');
-    const cancelBtn = document.getElementById('cancel-upload-btn');
-    if (!text.trim() && !file) return alert("Waan tokko barreessi!");
+
+    const user = auth.currentUser;
+
+    if (!user) {
+        return alert("Maaloo dura seeni!");
+    }
+
+    if (
+        typeof supabaseClient === "undefined" ||
+        !supabaseClient
+    ) {
+        return alert("Supabase connection hin argamne!");
+    }
+
+    const textEl = document.getElementById("post-text");
+    const fileInput = document.getElementById("media-upload");
+
+    let file = fileInput?.files?.[0];
+
+    const btn = document.getElementById("post-btn");
+    const loader = document.getElementById("btn-loader");
+
+    const progressCont = document.getElementById("upload-progress-container");
+    const progressBar = document.getElementById("upload-progress-bar");
+    const progressText = document.getElementById("progress-percent");
+
+    const cancelBtn = document.getElementById("cancel-upload-btn");
+
+    const BUCKET = "Oro-image";
+
+    let mediaUrl = "";
+    let thumbnailUrl = "";
+    let finalType = "text";
+
+    let activeUpload = null;
+
+    const originalButtonText = btn?.innerText || "Post";
+
+    // Generate unique filename
+    const createUniqueName = () => {
+        return typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : Date.now() + "_" +
+              Math.random().toString(36).slice(2);
+    };
+
+    // Get file extension
+    const getExtension = (mime) => {
+        const extensions = {
+            "image/jpeg": "jpg",
+            "image/png": "png",
+            "image/webp": "webp",
+            "video/mp4": "mp4",
+            "video/webm": "webm",
+            "video/quicktime": "mov"
+        };
+
+        return extensions[mime] || mime.split("/")[1] || "bin";
+    };
+
+    // Upload to Supabase with real progress and cancellation
+    const uploadToSupabase = (blob, filePath, contentType) => {
+
+        return new Promise((resolve, reject) => {
+
+            const xhr = new XMLHttpRequest();
+
+            activeUpload = xhr;
+            window.currentUploadTask = xhr;
+
+            const uploadURL =
+                `${supabaseUrl}/storage/v1/object/` +
+                `${encodeURIComponent(BUCKET)}/` +
+                filePath.split("/").map(encodeURIComponent).join("/");
+
+            xhr.open("POST", uploadURL, true);
+
+            xhr.setRequestHeader(
+                "apikey",
+                supabaseKey
+            );
+
+            xhr.setRequestHeader(
+                "Authorization",
+                "Bearer " + supabaseKey
+            );
+
+            xhr.setRequestHeader(
+                "Content-Type",
+                contentType
+            );
+
+            xhr.setRequestHeader(
+                "Cache-Control",
+                "3600"
+            );
+
+            xhr.setRequestHeader(
+                "x-upsert",
+                "false"
+            );
+
+            xhr.upload.onprogress = (event) => {
+
+                if (event.lengthComputable) {
+
+                    const percent = Math.round(
+                        (event.loaded / event.total) * 100
+                    );
+
+                    if (progressBar) {
+                        progressBar.style.width = percent + "%";
+                    }
+
+                    if (progressText) {
+                        progressText.innerText =
+                            `${percent}% fe'amaa jira...`;
+                    }
+
+                    if (btn) {
+                        btn.innerText =
+                            `Fe'aa jira... ${percent}%`;
+                    }
+                }
+            };
+
+            xhr.onload = () => {
+
+                activeUpload = null;
+                window.currentUploadTask = null;
+
+                let response = {};
+
+                try {
+                    response = JSON.parse(xhr.responseText);
+                } catch (_) {}
+
+                if (xhr.status >= 200 && xhr.status < 300) {
+
+                    resolve(response);
+
+                } else {
+
+                    reject(
+                        new Error(
+                            response.message ||
+                            response.error ||
+                            `Supabase upload failed: HTTP ${xhr.status}`
+                        )
+                    );
+                }
+            };
+
+            xhr.onerror = () => {
+
+                activeUpload = null;
+
+                reject(
+                    new Error(
+                        "Internet connection rakkoo qaba. Irra deebi'i."
+                    )
+                );
+            };
+
+            xhr.onabort = () => {
+
+                activeUpload = null;
+
+                const error = new Error("Upload cancelled.");
+                error.code = "storage/canceled";
+
+                reject(error);
+            };
+
+            xhr.send(blob);
+
+        });
+    };
+
+    // Cancel upload
+    if (cancelBtn) {
+
+        cancelBtn.onclick = () => {
+
+            if (activeUpload) {
+                activeUpload.abort();
+            }
+
+        };
+    }
+
+    const postText = textEl?.value?.trim() || "";
+
+    if (!postText && !file) {
+        return alert("Waan tokko barreessi ykn suuraa/viidiyoo filadhu!");
+    }
+
     try {
-        btn.disabled = true;
-        btn.innerText = "Hojjechaa jira...";
-        if (loader) loader.style.display = "inline-block";
-        let mediaUrl = "";
-        let thumbnailUrl = "";
-        let finalType = "text";
+
+        if (btn) {
+            btn.disabled = true;
+            btn.innerText = "Hojjechaa jira...";
+        }
+
+        if (loader) {
+            loader.style.display = "inline-block";
+        }
+
+        if (progressCont) {
+            progressCont.style.display = file ? "block" : "none";
+        }
+
+        if (cancelBtn) {
+            cancelBtn.style.display = file ? "inline-block" : "none";
+        }
+
+        // 1. Validate selected media
         if (file) {
-            if (file.type.includes('video')) {
+
+            if (file.type.startsWith("video/")) {
+
                 finalType = "video";
-                if (file.size > 15 * 1024 * 1024) throw new Error("Viidiyoon 15MB ol ta'uu hin qabu!");
-                if (typeof validateVideoDuration === "function") await validateVideoDuration(file);
-            } else if (file.type.includes('image')) {
+
+                const allowedVideos = [
+                    "video/mp4",
+                    "video/webm",
+                    "video/quicktime"
+                ];
+
+                if (!allowedVideos.includes(file.type)) {
+                    throw new Error(
+                        "MP4, WebM ykn MOV qofa fayyadami."
+                    );
+                }
+
+                if (file.size > 15 * 1024 * 1024) {
+                    throw new Error(
+                        "Viidiyoon 15MB ol ta'uu hin qabu!"
+                    );
+                }
+
+                if (typeof validateVideoDuration === "function") {
+                    await validateVideoDuration(file);
+                }
+
+            } else if (file.type.startsWith("image/")) {
+
                 finalType = "image";
-                if (typeof compressImage === "function") file = await compressImage(file);
+
+                const allowedImages = [
+                    "image/jpeg",
+                    "image/png",
+                    "image/webp"
+                ];
+
+                if (!allowedImages.includes(file.type)) {
+                    throw new Error(
+                        "JPEG, PNG ykn WebP qofa fayyadami."
+                    );
+                }
+
+                if (typeof compressImage === "function") {
+                    file = await compressImage(file);
+                }
+
+            } else {
+
+                throw new Error(
+                    "Maaloo suuraa ykn viidiyoo qofa filadhu."
+                );
             }
-            const sRef = ref(storage, `posts/${Date.now()}_${auth.currentUser?.uid || 'anon'}`);
-            const uploadTask = uploadBytesResumable(sRef, file);
-            currentUploadTask = uploadTask;
-            if (progressCont) progressCont.style.display = "block";
-            if (cancelBtn) {
-                cancelBtn.style.display = "inline-block";
-                cancelBtn.onclick = () => uploadTask.cancel();
+
+            // 2. Prepare media path
+            const extension = getExtension(file.type);
+
+            const uniqueName = createUniqueName();
+
+            const filePath =
+                `posts/${user.uid}/${uniqueName}.${extension}`;
+
+            if (btn) {
+                btn.innerText = "Supabase irratti fe'aa jira...";
             }
-            await new Promise((resolve, reject) => {
-                uploadTask.on('state_changed',
-                    (snap) => {
-                        const prog = (snap.bytesTransferred / snap.totalBytes) * 100;
-                        if (progressBar) progressBar.style.width = prog + "%";
-                        if (progressText) progressText.innerText = `${Math.round(prog)}% fe'amaa jira...`;
-                    },
-                    (err) => reject(err),
-                    async () => {
-                        try {
-                            mediaUrl = await getDownloadURL(uploadTask.snapshot.ref);
-                            resolve();
-                        } catch (urlErr) {
-                            reject(urlErr);
+
+            // 3. Upload media to Supabase
+            const uploadResult = await uploadToSupabase(
+                file,
+                filePath,
+                file.type
+            );
+
+            if (!uploadResult || !uploadResult.path) {
+                throw new Error(
+                    "Supabase media upload hin milkoofne."
+                );
+            }
+
+            // 4. Get public media URL
+            const { data: publicData } =
+                supabaseClient
+                    .storage
+                    .from(BUCKET)
+                    .getPublicUrl(uploadResult.path);
+
+            if (!publicData?.publicUrl) {
+                throw new Error(
+                    "Media public URL argachuun hin milkoofne."
+                );
+            }
+
+            mediaUrl = publicData.publicUrl;
+
+            // 5. Generate and upload video thumbnail
+            if (
+                finalType === "video" &&
+                typeof generateVideoThumbnail === "function"
+            ) {
+
+                try {
+
+                    const thumbBlob =
+                        await generateVideoThumbnail(file);
+
+                    if (thumbBlob) {
+
+                        const thumbPath =
+                            `thumbnails/${user.uid}/` +
+                            `${createUniqueName()}.jpg`;
+
+                        const thumbResult =
+                            await uploadToSupabase(
+                                thumbBlob,
+                                thumbPath,
+                                "image/jpeg"
+                            );
+
+                        if (thumbResult?.path) {
+
+                            const { data: thumbPublicData } =
+                                supabaseClient
+                                    .storage
+                                    .from(BUCKET)
+                                    .getPublicUrl(thumbResult.path);
+
+                            thumbnailUrl =
+                                thumbPublicData?.publicUrl || "";
                         }
                     }
-                );
-            });
-            if (finalType === 'video' && typeof generateVideoThumbnail === "function") {
-                try {
-                    const thumbBlob = await generateVideoThumbnail(file);
-                    const thumbRef = ref(storage, `thumbnails/${Date.now()}.jpg`);
-                    await uploadBytes(thumbRef, thumbBlob);
-                    thumbnailUrl = await getDownloadURL(thumbRef);
-                } catch (thumbErr) {
-                    console.error("Thumbnail error:", thumbErr);
+
+                } catch (thumbError) {
+
+                    console.error(
+                        "[ORO-THUMBNAIL ERROR]",
+                        thumbError
+                    );
                 }
             }
         }
-        await saveToFirestore(text, mediaUrl, finalType, thumbnailUrl);
-        alert("Milkaa'inaan maxxanfameera!");
-        resetUploadUI();
-    } catch (err) {
-        if (err.code === 'storage/canceled') {
-            alert("Fe'umsi addaan citeera.");
-        } else {
-            alert("Dogoggora: " + (err.message || "Halaalli hin beekamne uumame"));
+
+        // 6. Save post information to Firebase Firestore
+        await saveToFirestore(
+            postText,
+            mediaUrl,
+            finalType,
+            thumbnailUrl
+        );
+
+        // 7. Success
+        alert("Milkaa'inaan maxxanfameera! ✅");
+
+        if (typeof resetUploadUI === "function") {
+            resetUploadUI();
         }
-        resetUploadUI();
+
+    } catch (err) {
+
+        console.error(
+            "[ORO-POST UPLOAD ERROR]",
+            err
+        );
+
+        if (
+            err.code === "storage/canceled" ||
+            err.message === "Upload cancelled."
+        ) {
+
+            alert("Fe'umsi addaan citeera.");
+
+        } else {
+
+            alert(
+                "Post maxxansuun hin milkoofne!\n\n" +
+                (err.message || "Dogoggora hin beekamne.")
+            );
+        }
+
+        if (typeof resetUploadUI === "function") {
+            resetUploadUI();
+        }
+
+    } finally {
+
+        activeUpload = null;
+        window.currentUploadTask = null;
+
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = originalButtonText;
+        }
+
+        if (loader) {
+            loader.style.display = "none";
+        }
+
+        if (cancelBtn) {
+            cancelBtn.style.display = "none";
+        }
     }
 };
 let videoObserver = null;
