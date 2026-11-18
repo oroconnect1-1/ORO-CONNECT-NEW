@@ -14384,100 +14384,389 @@ function getVideoDuration(file) {
         video.src = URL.createObjectURL(file);
     });
 }
+// ==========================================
+// ORO-CONNECT SHORT VIDEOS - SUPABASE
+// ==========================================
+
 window.uploadShortVideo = async function(fileInput, captionInput) {
+
     const file = fileInput.files[0];
-    const caption = captionInput ? captionInput.value.trim() : "";
-    if (!auth.currentUser) return alert("Dura seenuu (login) kee mirkaneessi!");
-    if (!file || !file.type.startsWith('video/')) return alert("Maaloo faayilii viidiyoo sirrii filadhu!");
+    const caption = captionInput
+        ? captionInput.value.trim()
+        : "";
+
+    const user = auth.currentUser;
+
+    if (!user) {
+        return alert("Dura seenuu kee mirkaneessi!");
+    }
+
+    if (!file || !file.type.startsWith("video/")) {
+        return alert("Maaloo viidiyoo sirrii filadhu!");
+    }
+
     try {
+
+        // Viidiyoo dheerina isaa sakatta'uu
         const duration = await getVideoDuration(file);
+
         if (duration > 60) {
-            return alert("Viidiyoon gabaabaan (Reel) daqiiqaa 1 (sekoondii 60) caaluu hin danda'u!");
+            return alert(
+                "Viidiyoon gabaabaan sekondii 60 caaluu hin danda'u!"
+            );
         }
+
+        // Supabase connection mirkaneessuu
+        if (
+            typeof supabaseClient === "undefined" ||
+            !supabaseClient
+        ) {
+            throw new Error("Supabase connection hin argamne!");
+        }
+
+        // Video ID
         const videoId = doc(collection(db, "videos")).id;
-        const storageRef = ref(storage, `short_videos/${videoId}_${Date.now()}.mp4`);
-        const uploadTask = await uploadBytes(storageRef, file);
-        const videoUrl = await getDownloadURL(uploadTask.ref);
+
+        // File extension
+        const extension =
+            file.name.split(".").pop().toLowerCase();
+
+        // Supabase storage path
+        const filePath =
+            `short_videos/${user.uid}/${videoId}_${Date.now()}.${extension}`;
+
+        // Upload to Supabase
+        const { data, error } = await supabaseClient
+            .storage
+            .from("Oro-image")
+            .upload(filePath, file, {
+                contentType: file.type,
+                cacheControl: "3600",
+                upsert: false
+            });
+
+        if (error) {
+            throw error;
+        }
+
+        // Get public video URL
+        const { data: publicData } = supabaseClient
+            .storage
+            .from("Oro-image")
+            .getPublicUrl(data.path);
+
+        const videoUrl = publicData.publicUrl;
+
+        if (!videoUrl) {
+            throw new Error("Video URL hin argamne!");
+        }
+
+        // Save video information to Firestore
         await setDoc(doc(db, "videos", videoId), {
+
             id: videoId,
-            userId: auth.currentUser.uid,
-            userName: auth.currentUser.displayName || "Fayyadamaa OroConnect",
-            userPic: auth.currentUser.photoURL || "assets/img/default-profile.png",
+
+            userId: user.uid,
+
+            userName:
+                user.displayName || "Fayyadamaa OroConnect",
+
+            userPic:
+                user.photoURL || "assets/img/default-profile.png",
+
             videoUrl: videoUrl,
+
+            storagePath: data.path,
+
             caption: caption,
+
             duration: Math.round(duration),
+
             likes: [],
+
             likesCount: 0,
+
             sharesCount: 0,
+
             createdAt: serverTimestamp()
+
         });
-        alert("Viidiyoon gabaabaan milkaa'inaan maxxanfameera! 🎬");
-        if (captionInput) captionInput.value = "";
+
+        alert("Viidiyoon milkaa'inaan upload ta'eera! 🎬");
+
+        if (captionInput) {
+            captionInput.value = "";
+        }
+
         fileInput.value = "";
+
     } catch (error) {
-        console.error("Video Upload Error:", error);
-        alert("Viidiyoo maxxansuu irratti dogoggorri uumameera.");
+
+        console.error("Supabase Video Upload Error:", error);
+
+        alert(
+            "Viidiyoo upload gochuu irratti dogoggorri uumameera: " +
+            (error.message || "Unknown error")
+        );
     }
 };
+
+
+// ==========================================
+// LOAD SHORT VIDEOS
+// ==========================================
+
 window.shortVideosUnsubscribe = null;
+
 window.loadShortVideos = function() {
-    const container = document.getElementById('short-videos-container');
+
+    const container = document.getElementById(
+        "short-videos-container"
+    );
+
     if (!container) return;
+
     if (window.shortVideosUnsubscribe) {
         window.shortVideosUnsubscribe();
         window.shortVideosUnsubscribe = null;
     }
-    const q = query(collection(db, "videos"), orderBy("createdAt", "desc"), limit(20));
-    window.shortVideosUnsubscribe = onSnapshot(q, (snapshot) => {
-        if (snapshot.empty) {
-            container.innerHTML = `<div style="text-align:center; padding:40px; color:gray;">Viidiyoon gabaabaan tokkollee hin jiru. 🎥</div>`;
-            return;
-        }
-        let htmlContent = "";
-        const myUid = auth.currentUser ? auth.currentUser.uid : null;
-        snapshot.docs.forEach((docSnap) => {
-            const video = docSnap.data();
-            const isLiked = myUid && Array.isArray(video.likes) && video.likes.includes(myUid);
-            const likeIcon = isLiked ? '❤️' : '🤍';
-            const likeClass = isLiked ? 'liked' : '';
-            htmlContent += `
-                <div class="short-video-card" id="video-card-${video.id}" style="position: relative; margin-bottom: 20px; border-radius: 16px; overflow: hidden; background: #000;">
-                    <video src="${video.videoUrl}"
-                           loop
-                           playsinline
-                           onclick="this.paused ? this.play() : this.pause()"
-                           style="width: 100%; max-height: 80vh; object-fit: cover; display: block;">
-                    </video>
-                    <!-- Overlay Details & Buttons -->
-                    <div class="video-overlay" style="position: absolute; bottom: 0; left: 0; right: 0; padding: 15px; background: linear-gradient(transparent, rgba(0,0,0,0.8)); color: #fff; display: flex; justify-content: space-between; align-items: flex-end;">
-                        <div class="video-info" style="max-width: 75%;">
-                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                                <img src="${video.userPic}" onerror="this.src='assets/img/default-profile.png'" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid #fff;">
-                                <b style="font-size: 14px; text-shadow: 0 1px 2px rgba(0,0,0,0.5);">@${video.userName}</b>
-                            </div>
-                            <p style="margin: 0; font-size: 13px; line-height: 1.3; opacity: 0.95;">${video.caption || ""}</p>
-                        </div>
-                        <div class="video-actions" style="display: flex; flex-direction: column; gap: 12px; align-items: center;">
-                            <!-- Like Button -->
-                            <button onclick="window.toggleLikeVideo('${video.id}')" style="background: rgba(255,255,255,0.2); border: none; color: #fff; border-radius: 50%; width: 44px; height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; backdrop-filter: blur(4px);">
-                                <span style="font-size: 18px;">${likeIcon}</span>
-                                <small style="font-size: 10px; margin-top: 2px;">${video.likesCount || 0}</small>
-                            </button>
-                            <!-- Share Button -->
-                            <button onclick="window.shareVideo('${video.id}', '${video.caption.replace(/'/g, "\\'")}', '${video.videoUrl}')" style="background: rgba(255,255,255,0.2); border: none; color: #fff; border-radius: 50%; width: 44px; height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; backdrop-filter: blur(4px);">
-                                <span style="font-size: 18px;">↪️</span>
-                                <small style="font-size: 10px; margin-top: 2px;">${video.sharesCount || 0}</small>
-                            </button>
-                        </div>
+
+    const q = query(
+        collection(db, "videos"),
+        orderBy("createdAt", "desc"),
+        limit(20)
+    );
+
+    window.shortVideosUnsubscribe = onSnapshot(
+        q,
+
+        (snapshot) => {
+
+            if (snapshot.empty) {
+
+                container.innerHTML = `
+                    <div style="text-align:center;padding:40px;color:gray;">
+                        Viidiyoon gabaabaan tokkollee hin jiru. 🎥
                     </div>
+                `;
+
+                return;
+            }
+
+            let htmlContent = "";
+
+            const myUid = auth.currentUser
+                ? auth.currentUser.uid
+                : null;
+
+            snapshot.docs.forEach((docSnap) => {
+
+                const video = docSnap.data();
+
+                const isLiked =
+                    myUid &&
+                    Array.isArray(video.likes) &&
+                    video.likes.includes(myUid);
+
+                const likeIcon = isLiked ? "❤️" : "🤍";
+
+                const safeCaption = String(
+                    video.caption || ""
+                ).replace(/[&<>"']/g, char => ({
+                    "&": "&amp;",
+                    "<": "&lt;",
+                    ">": "&gt;",
+                    '"': "&quot;",
+                    "'": "&#39;"
+                })[char]);
+
+                const safeName = String(
+                    video.userName || "Fayyadamaa"
+                ).replace(/[&<>"']/g, char => ({
+                    "&": "&amp;",
+                    "<": "&lt;",
+                    ">": "&gt;",
+                    '"': "&quot;",
+                    "'": "&#39;"
+                })[char]);
+
+                const safePic = String(
+                    video.userPic ||
+                    "assets/img/default-profile.png"
+                );
+
+                const safeUrl = String(video.videoUrl || "");
+
+                htmlContent += `
+
+                    <div
+                        class="short-video-card"
+                        id="video-card-${video.id}"
+                        style="
+                            position:relative;
+                            margin-bottom:20px;
+                            border-radius:16px;
+                            overflow:hidden;
+                            background:#000;
+                        "
+                    >
+
+                        <video
+                            src="${safeUrl}"
+                            loop
+                            playsinline
+                            controls
+                            preload="metadata"
+                            onclick="
+                                this.paused
+                                ? this.play()
+                                : this.pause()
+                            "
+                            style="
+                                width:100%;
+                                max-height:80vh;
+                                object-fit:cover;
+                                display:block;
+                            "
+                        ></video>
+
+                        <div
+                            class="video-overlay"
+                            style="
+                                position:absolute;
+                                bottom:0;
+                                left:0;
+                                right:0;
+                                padding:15px;
+                                background:linear-gradient(
+                                    transparent,
+                                    rgba(0,0,0,0.8)
+                                );
+                                color:#fff;
+                                display:flex;
+                                justify-content:space-between;
+                                align-items:flex-end;
+                            "
+                        >
+
+                            <div class="video-info" style="max-width:75%;">
+
+                                <div style="
+                                    display:flex;
+                                    align-items:center;
+                                    gap:8px;
+                                    margin-bottom:6px;
+                                ">
+
+                                    <img
+                                        src="${safePic}"
+                                        onerror="
+                                            this.src='assets/img/default-profile.png'
+                                        "
+                                        style="
+                                            width:36px;
+                                            height:36px;
+                                            border-radius:50%;
+                                            object-fit:cover;
+                                            border:2px solid #fff;
+                                        "
+                                    >
+
+                                    <b style="font-size:14px;">
+                                        @${safeName}
+                                    </b>
+
+                                </div>
+
+                                <p style="
+                                    margin:0;
+                                    font-size:13px;
+                                    line-height:1.3;
+                                ">
+                                    ${safeCaption}
+                                </p>
+
+                            </div>
+
+                            <div style="
+                                display:flex;
+                                flex-direction:column;
+                                gap:12px;
+                                align-items:center;
+                            ">
+
+                                <button
+                                    onclick="
+                                        window.toggleLikeVideo('${video.id}')
+                                    "
+                                    style="
+                                        background:rgba(255,255,255,.2);
+                                        border:none;
+                                        color:#fff;
+                                        border-radius:50%;
+                                        width:44px;
+                                        height:44px;
+                                        cursor:pointer;
+                                    "
+                                >
+                                    ${likeIcon}
+                                    <small>
+                                        ${video.likesCount || 0}
+                                    </small>
+                                </button>
+
+                                <button
+                                    onclick="
+                                        window.shareVideo(
+                                            '${video.id}',
+                                            this.dataset.caption,
+                                            this.dataset.url
+                                        )
+                                    "
+                                    data-caption="${safeCaption}"
+                                    data-url="${safeUrl}"
+                                    style="
+                                        background:rgba(255,255,255,.2);
+                                        border:none;
+                                        color:#fff;
+                                        border-radius:50%;
+                                        width:44px;
+                                        height:44px;
+                                        cursor:pointer;
+                                    "
+                                >
+                                    ↪️
+                                    <small>
+                                        ${video.sharesCount || 0}
+                                    </small>
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+                `;
+            });
+
+            container.innerHTML = htmlContent;
+
+        },
+
+        (error) => {
+
+            console.error(
+                "Short Videos Loading Error:",
+                error
+            );
+
+            container.innerHTML = `
+                <div style="color:#e74c3c;text-align:center;padding:20px;">
+                    Viidiyoo fiduu irratti dogoggorri uumameera.
                 </div>
             `;
-        });
-        container.innerHTML = htmlContent;
-    }, (err) => {
-        console.error("Short Videos Snapshot Error:", err);
-        container.innerHTML = `<div style="color:#e74c3c; text-align:center; padding:20px;">Viidiyoo fiduu irratti dogoggorri uumameera.</div>`;
-    });
+        }
+    );
 };
 window.toggleLikeVideo = async function(videoId) {
     if (!auth.currentUser) return alert("Dura seenuu (login) kee mirkaneessi!");
