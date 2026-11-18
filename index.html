@@ -14,14 +14,14 @@
 <meta property="og:url" content="https://oro-connect-1f468.firebaseapp.com/">
 <meta property="og:title" content="ORO-CONNECT - Eenyummaa irraa gara Addunyaatti!">
 <meta property="og:description" content="ORO-CONNECT platform haaraa wal-qunnamtii hawaasaa Afaan Oromootiin.">
-<meta property="og:image" content="./assets/img/icon-512.png">
+<meta property="og:image" content="https://oro-connect-1f468.firebaseapp.com/assets/img/icon.png">
 
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:url" content="https://oro-connect-1f468.firebaseapp.com/">
 <meta name="twitter:title" content="ORO-CONNECT - Eenyummaa irraa gara Addunyaatti!">
 <meta name="twitter:description" content="ORO-CONNECT platform haaraa wal-qunnamtii hawaasaa Afaan Oromootiin.">
-<meta name="twitter:image" content="./assets/img/icon-512.png">
+<meta name="twitter:image" content="https://oro-connect-1f468.firebaseapp.com/assets/img/icon.png">
 
 <!-- Content Security Policy -->
 <meta http-equiv="Content-Security-Policy"
@@ -44,11 +44,11 @@ https://resource.zegocloud.com;
     form-action 'self' https:;">
 <!-- App Icons -->
 <link rel="apple-touch-icon"
-    href="./assets/img/icon-192.png">
+    href="https://oro-connect-1f468.firebaseapp.com/assets/img/icon.png">
 
 <link rel="icon"
     type="image/png"
-    href="./assets/img/favicon.png">
+    href="https://oro-connect-1f468.firebaseapp.com/assets/img/icon.png">
 
 <!-- Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -63,7 +63,7 @@ https://resource.zegocloud.com;
 <link rel="stylesheet" href="./style.css">
 
 <!-- PWA Manifest & Icons -->
-<link rel="manifest" href="./manifest.json">
+<link rel="manifest" href="./Manifest.json">
 <!-- DOMPurify -->
 <script
     src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"
@@ -13710,6 +13710,16 @@ window.handlePost = async () => {
         return alert("Supabase connection hin argamne!");
     }
 
+    // Supabase configuration validation
+    if (
+        typeof supabaseUrl === "undefined" ||
+        !supabaseUrl ||
+        typeof supabaseKey === "undefined" ||
+        !supabaseKey
+    ) {
+        return alert("Supabase URL ykn publishable key hin argamne!");
+    }
+
     const textEl = document.getElementById("post-text");
     const fileInput = document.getElementById("media-upload");
 
@@ -13718,12 +13728,19 @@ window.handlePost = async () => {
     const btn = document.getElementById("post-btn");
     const loader = document.getElementById("btn-loader");
 
-    const progressCont = document.getElementById("upload-progress-container");
-    const progressBar = document.getElementById("upload-progress-bar");
-    const progressText = document.getElementById("progress-percent");
+    const progressCont =
+        document.getElementById("upload-progress-container");
 
-    const cancelBtn = document.getElementById("cancel-upload-btn");
+    const progressBar =
+        document.getElementById("upload-progress-bar");
 
+    const progressText =
+        document.getElementById("progress-percent");
+
+    const cancelBtn =
+        document.getElementById("cancel-upload-btn");
+
+    // Exact Supabase bucket name
     const BUCKET = "Oro-image";
 
     let mediaUrl = "";
@@ -13735,16 +13752,18 @@ window.handlePost = async () => {
 
     const originalButtonText = btn?.innerText || "Post";
 
-    // Create unique filename
+    // Unique filename
     const createUniqueName = () => {
-        return typeof crypto.randomUUID === "function"
+        return typeof crypto !== "undefined" &&
+               typeof crypto.randomUUID === "function"
             ? crypto.randomUUID()
             : Date.now() + "_" +
               Math.random().toString(36).slice(2);
     };
 
-    // Get file extension
+    // File extension
     const getExtension = (mime) => {
+
         const extensions = {
             "image/jpeg": "jpg",
             "image/png": "png",
@@ -13754,11 +13773,17 @@ window.handlePost = async () => {
             "video/quicktime": "mov"
         };
 
-        return extensions[mime] || mime.split("/")[1] || "bin";
+        return extensions[mime] ||
+               mime.split("/")[1] ||
+               "bin";
     };
 
     // Upload to Supabase with progress and cancellation
-    const uploadToSupabase = (blob, filePath, contentType) => {
+    const uploadToSupabase = (
+        blob,
+        filePath,
+        contentType
+    ) => {
 
         return new Promise((resolve, reject) => {
 
@@ -13773,18 +13798,32 @@ window.handlePost = async () => {
                 .join("/");
 
             const uploadURL =
-                `${supabaseUrl}/storage/v1/object/` +
-                `${encodeURIComponent(BUCKET)}/${encodedPath}`;
+                `${supabaseUrl.replace(/\/$/, "")}` +
+                `/storage/v1/object/` +
+                `${encodeURIComponent(BUCKET)}/` +
+                `${encodedPath}`;
 
             xhr.open("POST", uploadURL, true);
 
-            xhr.setRequestHeader("apikey", supabaseKey);
+            xhr.setRequestHeader(
+                "apikey",
+                supabaseKey
+            );
 
-            xhr.setRequestHeader("Content-Type", contentType);
+            xhr.setRequestHeader(
+                "Content-Type",
+                contentType
+            );
 
-            xhr.setRequestHeader("Cache-Control", "3600");
+            xhr.setRequestHeader(
+                "Cache-Control",
+                "3600"
+            );
 
-            xhr.setRequestHeader("x-upsert", "false");
+            xhr.setRequestHeader(
+                "x-upsert",
+                "false"
+            );
 
             xhr.upload.onprogress = (event) => {
 
@@ -13795,7 +13834,8 @@ window.handlePost = async () => {
                     );
 
                     if (progressBar) {
-                        progressBar.style.width = percent + "%";
+                        progressBar.style.width =
+                            percent + "%";
                     }
 
                     if (progressText) {
@@ -13818,20 +13858,27 @@ window.handlePost = async () => {
                 let response = {};
 
                 try {
-                    response = JSON.parse(xhr.responseText);
+                    response = JSON.parse(
+                        xhr.responseText
+                    );
                 } catch (_) {
                     response = {
                         message: xhr.responseText
                     };
                 }
 
-                console.log("[ORO-SUPABASE RESPONSE]", {
-                    status: xhr.status,
-                    response: response
-                });
+                console.log(
+                    "[ORO-SUPABASE RESPONSE]",
+                    {
+                        status: xhr.status,
+                        response: response
+                    }
+                );
 
-                if (xhr.status >= 200 && xhr.status < 300) {
-
+                if (
+                    xhr.status >= 200 &&
+                    xhr.status < 300
+                ) {
                     resolve(response);
 
                 } else {
@@ -13864,7 +13911,10 @@ window.handlePost = async () => {
                 activeUpload = null;
                 window.currentUploadTask = null;
 
-                const error = new Error("Upload cancelled.");
+                const error = new Error(
+                    "Upload cancelled."
+                );
+
                 error.code = "storage/canceled";
 
                 reject(error);
@@ -13880,13 +13930,16 @@ window.handlePost = async () => {
         cancelBtn.onclick = () => {
 
             if (activeUpload) {
+
                 uploadCancelled = true;
+
                 activeUpload.abort();
             }
         };
     }
 
-    const postText = textEl?.value?.trim() || "";
+    const postText =
+        textEl?.value?.trim() || "";
 
     if (!postText && !file) {
         return alert(
@@ -13896,7 +13949,7 @@ window.handlePost = async () => {
 
     try {
 
-        // UI loading
+        // Loading UI
         if (btn) {
             btn.disabled = true;
             btn.innerText = "Hojjechaa jira...";
@@ -13907,7 +13960,8 @@ window.handlePost = async () => {
         }
 
         if (progressCont) {
-            progressCont.style.display = file ? "block" : "none";
+            progressCont.style.display =
+                file ? "block" : "none";
         }
 
         if (progressBar) {
@@ -13919,7 +13973,8 @@ window.handlePost = async () => {
         }
 
         if (cancelBtn) {
-            cancelBtn.style.display = file ? "inline-block" : "none";
+            cancelBtn.style.display =
+                file ? "inline-block" : "none";
         }
 
         // 1. Validate media
@@ -13947,7 +14002,9 @@ window.handlePost = async () => {
                     );
                 }
 
-                if (typeof validateVideoDuration === "function") {
+                if (
+                    typeof validateVideoDuration === "function"
+                ) {
                     await validateVideoDuration(file);
                 }
 
@@ -13967,7 +14024,9 @@ window.handlePost = async () => {
                     );
                 }
 
-                if (typeof compressImage === "function") {
+                if (
+                    typeof compressImage === "function"
+                ) {
                     file = await compressImage(file);
                 }
 
@@ -13976,6 +14035,10 @@ window.handlePost = async () => {
                 throw new Error(
                     "Maaloo suuraa ykn viidiyoo qofa filadhu."
                 );
+            }
+
+            if (uploadCancelled) {
+                throw new Error("Upload cancelled.");
             }
 
             // 2. Create media path
@@ -13987,7 +14050,8 @@ window.handlePost = async () => {
                 `posts/${user.uid}/${uniqueName}.${extension}`;
 
             if (btn) {
-                btn.innerText = "Supabase irratti fe'aa jira...";
+                btn.innerText =
+                    "Supabase irratti fe'aa jira...";
             }
 
             // 3. Upload media
@@ -14001,12 +14065,14 @@ window.handlePost = async () => {
                 throw new Error("Upload cancelled.");
             }
 
-            // 4. Get public URL using known filePath
-            const { data: publicData, error: publicError } =
-                supabaseClient
-                    .storage
-                    .from(BUCKET)
-                    .getPublicUrl(filePath);
+            // 4. Get public media URL
+            const {
+                data: publicData,
+                error: publicError
+            } = supabaseClient
+                .storage
+                .from(BUCKET)
+                .getPublicUrl(filePath);
 
             if (publicError) {
                 throw publicError;
@@ -14043,20 +14109,36 @@ window.handlePost = async () => {
                             "image/jpeg"
                         );
 
-                        if (!uploadCancelled) {
-
-                            const { data: thumbPublicData } =
-                                supabaseClient
-                                    .storage
-                                    .from(BUCKET)
-                                    .getPublicUrl(thumbPath);
-
-                            thumbnailUrl =
-                                thumbPublicData?.publicUrl || "";
+                        if (uploadCancelled) {
+                            throw new Error(
+                                "Upload cancelled."
+                            );
                         }
+
+                        const {
+                            data: thumbPublicData,
+                            error: thumbPublicError
+                        } = supabaseClient
+                            .storage
+                            .from(BUCKET)
+                            .getPublicUrl(thumbPath);
+
+                        if (thumbPublicError) {
+                            throw thumbPublicError;
+                        }
+
+                        thumbnailUrl =
+                            thumbPublicData?.publicUrl || "";
                     }
 
                 } catch (thumbError) {
+
+                    if (
+                        thumbError.message ===
+                        "Upload cancelled."
+                    ) {
+                        throw thumbError;
+                    }
 
                     console.error(
                         "[ORO-THUMBNAIL ERROR]",
@@ -14071,6 +14153,14 @@ window.handlePost = async () => {
         }
 
         // 6. Save post information to Firestore
+        if (
+            typeof saveToFirestore !== "function"
+        ) {
+            throw new Error(
+                "saveToFirestore function hin argamne."
+            );
+        }
+
         await saveToFirestore(
             postText,
             mediaUrl,
@@ -14079,9 +14169,13 @@ window.handlePost = async () => {
         );
 
         // 7. Success
-        alert("Milkaa'inaan maxxanfameera! ✅");
+        alert(
+            "Milkaa'inaan maxxanfameera! ✅"
+        );
 
-        if (typeof resetUploadUI === "function") {
+        if (
+            typeof resetUploadUI === "function"
+        ) {
             resetUploadUI();
         }
 
@@ -14103,11 +14197,16 @@ window.handlePost = async () => {
 
             alert(
                 "Post maxxansuun hin milkoofne!\n\n" +
-                (err.message || "Dogoggora hin beekamne.")
+                (
+                    err.message ||
+                    "Dogoggora hin beekamne."
+                )
             );
         }
 
-        if (typeof resetUploadUI === "function") {
+        if (
+            typeof resetUploadUI === "function"
+        ) {
             resetUploadUI();
         }
 
@@ -18379,11 +18478,6 @@ window.followUser = async (targetUid) => {
 let globalProfileListener = null;
 
 window.openUserProfile = async function (userId) {
-
-    /* =====================================================
-       1. FIREBASE INSTANCES
-    ===================================================== */
-
     const fAuth =
         window.AppService?.auth ||
         window.auth ||
@@ -20675,10 +20769,12 @@ window.updateFullProfile = async function () {
             }
         }
 
-        // 5. Existing photo URL
+        // 5. Existing profile photo URL
         let photoURL = String(
             oldData.photoURL ||
             oldData.userPic ||
+            oldData.photo ||
+            oldData.profilePic ||
             user.photoURL ||
             ""
         );
@@ -20717,7 +20813,7 @@ window.updateFullProfile = async function () {
 
             if (btn) {
                 btn.textContent =
-                    "Suuraa fe'aa jira... ⏳";
+                    "Suuraa Supabase irratti fe'aa jira... ⏳";
             }
 
             const extension = {
@@ -20733,16 +20829,17 @@ window.updateFullProfile = async function () {
                       Math.random().toString(36).slice(2);
 
             const filePath =
-                `${user.uid}/${uniqueName}.${extension}`;
+                `profiles/${user.uid}/${uniqueName}.${extension}`;
 
+            // Upload to Supabase
             const { data, error } = await supabaseClient
-    .storage
-    .from("Oro-image")
-    .upload(filePath, file, {
-        cacheControl: "3600",
-        contentType: file.type,
-        upsert: false
-    });
+                .storage
+                .from("Oro-image")
+                .upload(filePath, file, {
+                    cacheControl: "3600",
+                    contentType: file.type,
+                    upsert: false
+                });
 
             if (error) {
                 throw new Error(
@@ -20758,18 +20855,19 @@ window.updateFullProfile = async function () {
 
             // Get public URL
             const { data: publicData } =
-supabaseClient
-    .storage
-    .from("Oro-image")
-    .getPublicUrl(filePath);
+                supabaseClient
+                    .storage
+                    .from("Oro-image")
+                    .getPublicUrl(filePath);
 
-if (!publicData?.publicUrl) {
-    throw new Error(
-        "Supabase public URL hin argamne."
-    );
-}
+            if (!publicData?.publicUrl) {
+                throw new Error(
+                    "Supabase public URL hin argamne."
+                );
+            }
 
-mediaUrl = publicData.publicUrl;
+            // IMPORTANT: Save URL to photoURL
+            photoURL = publicData.publicUrl;
         }
 
         // 7. Update Firebase Authentication
@@ -23632,16 +23730,6 @@ window.deleteMessage = async (chatId, messageId) => {
     }
 };
 window.currentChatUnsubscribe=null;
-/* =====================================================
-   ORO CONNECT — PRODUCTION CHAT MESSAGE LOADER
-   Supports:
-   - Text messages
-   - Image messages
-   - Video messages
-   - Voice messages (mediaUrl / audioUrl)
-   - Realtime Firestore updates
-===================================================== */
-
 window.loadMessages = function (targetUid, targetName) {
 
     const chat = document.getElementById("chat-window");
