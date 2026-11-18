@@ -13987,11 +13987,15 @@ window.handlePost = async () => {
                 file.type
             );
 
-            if (!uploadResult || !uploadResult.path) {
-                throw new Error(
-                    "Supabase media upload hin milkoofne."
-                );
-            }
+            if (
+    !uploadResult ||
+    (!uploadResult.Key && !uploadResult.path)
+) {
+    throw new Error(
+        "Supabase upload response sirrii miti: " +
+        JSON.stringify(uploadResult)
+    );
+}
 
             // 4. Get public media URL
             const { data: publicData } =
@@ -14032,19 +14036,17 @@ window.handlePost = async () => {
                                 "image/jpeg"
                             );
 
-                        if (thumbResult?.path) {
-
-                            const { data: thumbPublicData } =
-                                supabaseClient
-                                    .storage
-                                    .from(BUCKET)
-                                    .getPublicUrl(thumbResult.path);
-
-                            thumbnailUrl =
-                                thumbPublicData?.publicUrl || "";
-                        }
-                    }
-
+                        if (thumbResult) {
+    const { data: thumbPublicData } =
+    supabaseClient
+        .storage
+        .from(BUCKET)
+        .getPublicUrl(thumbPath);
+    
+    thumbnailUrl =
+        thumbPublicData?.publicUrl || "";
+}
+}
                 } catch (thumbError) {
 
                     console.error(
@@ -20742,15 +20744,15 @@ window.updateFullProfile = async function () {
 supabaseClient
     .storage
     .from("Oro-image")
-    .getPublicUrl(data.path);
+    .getPublicUrl(filePath);
 
-            if (!publicData?.publicUrl) {
-                throw new Error(
-                    "Public URL suuraa hin argamne."
-                );
-            }
+if (!publicData?.publicUrl) {
+    throw new Error(
+        "Supabase public URL hin argamne."
+    );
+}
 
-            photoURL = publicData.publicUrl;
+mediaUrl = publicData.publicUrl;
         }
 
         // 7. Update Firebase Authentication
