@@ -1,33 +1,34 @@
 name: Deploy ORO-CONNECT to Firebase Hosting
 
 on:
-push:
-branches:
-- main
-workflow_dispatch:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
-deploy:
-runs-on: ubuntu-latest
-steps:
-- name: Checkout repository
-uses: actions/checkout@v4
+  deploy:
+    runs-on: ubuntu-latest
 
-  - name: Check Firebase Secret
-    env:
-      FIREBASE_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-    run: |
-      if [ -z "$FIREBASE_KEY" ]; then
-        echo "ERROR: Firebase Secret is EMPTY"
-        exit 1
-      else
-        echo "SUCCESS: Firebase Secret is available"
-      fi
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-  - name: Deploy to Firebase Hosting
-    uses: FirebaseExtended/action-hosting-deploy@v0
-    with:
-      firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
-      projectId: oro-connect-1f468
-      channelId: live
-      entryPoint: .
+      - name: Check Firebase Secret
+        env:
+          FIREBASE_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_KEY" ]; then
+            echo "ERROR: Firebase Secret is EMPTY"
+            exit 1
+          else
+            echo "SUCCESS: Firebase Secret is available"
+          fi
+
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          projectId: oro-connect-1f468
+          channelId: live
+          entryPoint: .
