@@ -1,3 +1,4 @@
+"One Platform. One Community. One Global Connection."
 # ORO-CONNECT
 
 **ORO-CONNECT** marsariitii fi appii mobaayilaa (Progressive Web App / Android APK) hawaasa walqunnamsiisuu fi odeeffannoo qooduuf qophaa'edha.
