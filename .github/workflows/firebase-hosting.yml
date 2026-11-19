@@ -12,6 +12,16 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+              - name: Check Firebase Secret
+        env:
+          FIREBASE_KEY: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_KEY" ]; then
+            echo "ERROR: Firebase Secret is EMPTY"
+            exit 1
+          else
+            echo "SUCCESS: Firebase Secret is available"
+          fi
 
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
