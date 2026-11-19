@@ -14,14 +14,14 @@
 <meta property="og:url" content="https://oro-connect-1f468.firebaseapp.com/">
 <meta property="og:title" content="ORO-CONNECT - Eenyummaa irraa gara Addunyaatti!">
 <meta property="og:description" content="ORO-CONNECT platform haaraa wal-qunnamtii hawaasaa Afaan Oromootiin.">
-<meta property="og:image" content="./assets/img/icon-512.png">
+<meta property="og:image" content="https://oro-connect-1f468.firebaseapp.com/assets/img/icon.png">
 
 <!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:url" content="https://oro-connect-1f468.firebaseapp.com/">
 <meta name="twitter:title" content="ORO-CONNECT - Eenyummaa irraa gara Addunyaatti!">
 <meta name="twitter:description" content="ORO-CONNECT platform haaraa wal-qunnamtii hawaasaa Afaan Oromootiin.">
-<meta name="twitter:image" content="./assets/img/icon-512.png">
+<meta name="twitter:image" content="https://oro-connect-1f468.firebaseapp.com/assets/img/icon.png">
 
 <!-- Content Security Policy -->
 <meta http-equiv="Content-Security-Policy"
@@ -44,11 +44,11 @@ https://resource.zegocloud.com;
     form-action 'self' https:;">
 <!-- App Icons -->
 <link rel="apple-touch-icon"
-    href="./assets/img/icon-192.png">
+    href="https://oro-connect-1f468.firebaseapp.com/assets/img/icon.png">
 
 <link rel="icon"
     type="image/png"
-    href="./assets/img/favicon.png">
+    href="https://oro-connect-1f468.firebaseapp.com/assets/img/icon.png">
 
 <!-- Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -63,7 +63,7 @@ https://resource.zegocloud.com;
 <link rel="stylesheet" href="./style.css">
 
 <!-- PWA Manifest & Icons -->
-<link rel="manifest" href="./manifest.json">
+<link rel="manifest" href="./Manifest.json">
 <!-- DOMPurify -->
 <script
     src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.8/purify.min.js"
@@ -13710,6 +13710,16 @@ window.handlePost = async () => {
         return alert("Supabase connection hin argamne!");
     }
 
+    // Supabase configuration validation
+    if (
+        typeof supabaseUrl === "undefined" ||
+        !supabaseUrl ||
+        typeof supabaseKey === "undefined" ||
+        !supabaseKey
+    ) {
+        return alert("Supabase URL ykn publishable key hin argamne!");
+    }
+
     const textEl = document.getElementById("post-text");
     const fileInput = document.getElementById("media-upload");
 
@@ -13718,12 +13728,19 @@ window.handlePost = async () => {
     const btn = document.getElementById("post-btn");
     const loader = document.getElementById("btn-loader");
 
-    const progressCont = document.getElementById("upload-progress-container");
-    const progressBar = document.getElementById("upload-progress-bar");
-    const progressText = document.getElementById("progress-percent");
+    const progressCont =
+        document.getElementById("upload-progress-container");
 
-    const cancelBtn = document.getElementById("cancel-upload-btn");
+    const progressBar =
+        document.getElementById("upload-progress-bar");
 
+    const progressText =
+        document.getElementById("progress-percent");
+
+    const cancelBtn =
+        document.getElementById("cancel-upload-btn");
+
+    // Exact Supabase bucket name
     const BUCKET = "Oro-image";
 
     let mediaUrl = "";
@@ -13735,16 +13752,18 @@ window.handlePost = async () => {
 
     const originalButtonText = btn?.innerText || "Post";
 
-    // Create unique filename
+    // Unique filename
     const createUniqueName = () => {
-        return typeof crypto.randomUUID === "function"
+        return typeof crypto !== "undefined" &&
+               typeof crypto.randomUUID === "function"
             ? crypto.randomUUID()
             : Date.now() + "_" +
               Math.random().toString(36).slice(2);
     };
 
-    // Get file extension
+    // File extension
     const getExtension = (mime) => {
+
         const extensions = {
             "image/jpeg": "jpg",
             "image/png": "png",
@@ -13754,11 +13773,17 @@ window.handlePost = async () => {
             "video/quicktime": "mov"
         };
 
-        return extensions[mime] || mime.split("/")[1] || "bin";
+        return extensions[mime] ||
+               mime.split("/")[1] ||
+               "bin";
     };
 
     // Upload to Supabase with progress and cancellation
-    const uploadToSupabase = (blob, filePath, contentType) => {
+    const uploadToSupabase = (
+        blob,
+        filePath,
+        contentType
+    ) => {
 
         return new Promise((resolve, reject) => {
 
@@ -13773,18 +13798,32 @@ window.handlePost = async () => {
                 .join("/");
 
             const uploadURL =
-                `${supabaseUrl}/storage/v1/object/` +
-                `${encodeURIComponent(BUCKET)}/${encodedPath}`;
+                `${supabaseUrl.replace(/\/$/, "")}` +
+                `/storage/v1/object/` +
+                `${encodeURIComponent(BUCKET)}/` +
+                `${encodedPath}`;
 
             xhr.open("POST", uploadURL, true);
 
-            xhr.setRequestHeader("apikey", supabaseKey);
+            xhr.setRequestHeader(
+                "apikey",
+                supabaseKey
+            );
 
-            xhr.setRequestHeader("Content-Type", contentType);
+            xhr.setRequestHeader(
+                "Content-Type",
+                contentType
+            );
 
-            xhr.setRequestHeader("Cache-Control", "3600");
+            xhr.setRequestHeader(
+                "Cache-Control",
+                "3600"
+            );
 
-            xhr.setRequestHeader("x-upsert", "false");
+            xhr.setRequestHeader(
+                "x-upsert",
+                "false"
+            );
 
             xhr.upload.onprogress = (event) => {
 
@@ -13795,7 +13834,8 @@ window.handlePost = async () => {
                     );
 
                     if (progressBar) {
-                        progressBar.style.width = percent + "%";
+                        progressBar.style.width =
+                            percent + "%";
                     }
 
                     if (progressText) {
@@ -13818,20 +13858,27 @@ window.handlePost = async () => {
                 let response = {};
 
                 try {
-                    response = JSON.parse(xhr.responseText);
+                    response = JSON.parse(
+                        xhr.responseText
+                    );
                 } catch (_) {
                     response = {
                         message: xhr.responseText
                     };
                 }
 
-                console.log("[ORO-SUPABASE RESPONSE]", {
-                    status: xhr.status,
-                    response: response
-                });
+                console.log(
+                    "[ORO-SUPABASE RESPONSE]",
+                    {
+                        status: xhr.status,
+                        response: response
+                    }
+                );
 
-                if (xhr.status >= 200 && xhr.status < 300) {
-
+                if (
+                    xhr.status >= 200 &&
+                    xhr.status < 300
+                ) {
                     resolve(response);
 
                 } else {
@@ -13864,7 +13911,10 @@ window.handlePost = async () => {
                 activeUpload = null;
                 window.currentUploadTask = null;
 
-                const error = new Error("Upload cancelled.");
+                const error = new Error(
+                    "Upload cancelled."
+                );
+
                 error.code = "storage/canceled";
 
                 reject(error);
@@ -13880,13 +13930,16 @@ window.handlePost = async () => {
         cancelBtn.onclick = () => {
 
             if (activeUpload) {
+
                 uploadCancelled = true;
+
                 activeUpload.abort();
             }
         };
     }
 
-    const postText = textEl?.value?.trim() || "";
+    const postText =
+        textEl?.value?.trim() || "";
 
     if (!postText && !file) {
         return alert(
@@ -13896,7 +13949,7 @@ window.handlePost = async () => {
 
     try {
 
-        // UI loading
+        // Loading UI
         if (btn) {
             btn.disabled = true;
             btn.innerText = "Hojjechaa jira...";
@@ -13907,7 +13960,8 @@ window.handlePost = async () => {
         }
 
         if (progressCont) {
-            progressCont.style.display = file ? "block" : "none";
+            progressCont.style.display =
+                file ? "block" : "none";
         }
 
         if (progressBar) {
@@ -13919,7 +13973,8 @@ window.handlePost = async () => {
         }
 
         if (cancelBtn) {
-            cancelBtn.style.display = file ? "inline-block" : "none";
+            cancelBtn.style.display =
+                file ? "inline-block" : "none";
         }
 
         // 1. Validate media
@@ -13947,7 +14002,9 @@ window.handlePost = async () => {
                     );
                 }
 
-                if (typeof validateVideoDuration === "function") {
+                if (
+                    typeof validateVideoDuration === "function"
+                ) {
                     await validateVideoDuration(file);
                 }
 
@@ -13967,7 +14024,9 @@ window.handlePost = async () => {
                     );
                 }
 
-                if (typeof compressImage === "function") {
+                if (
+                    typeof compressImage === "function"
+                ) {
                     file = await compressImage(file);
                 }
 
@@ -13976,6 +14035,10 @@ window.handlePost = async () => {
                 throw new Error(
                     "Maaloo suuraa ykn viidiyoo qofa filadhu."
                 );
+            }
+
+            if (uploadCancelled) {
+                throw new Error("Upload cancelled.");
             }
 
             // 2. Create media path
@@ -13987,7 +14050,8 @@ window.handlePost = async () => {
                 `posts/${user.uid}/${uniqueName}.${extension}`;
 
             if (btn) {
-                btn.innerText = "Supabase irratti fe'aa jira...";
+                btn.innerText =
+                    "Supabase irratti fe'aa jira...";
             }
 
             // 3. Upload media
@@ -14001,12 +14065,14 @@ window.handlePost = async () => {
                 throw new Error("Upload cancelled.");
             }
 
-            // 4. Get public URL using known filePath
-            const { data: publicData, error: publicError } =
-                supabaseClient
-                    .storage
-                    .from(BUCKET)
-                    .getPublicUrl(filePath);
+            // 4. Get public media URL
+            const {
+                data: publicData,
+                error: publicError
+            } = supabaseClient
+                .storage
+                .from(BUCKET)
+                .getPublicUrl(filePath);
 
             if (publicError) {
                 throw publicError;
@@ -14043,20 +14109,36 @@ window.handlePost = async () => {
                             "image/jpeg"
                         );
 
-                        if (!uploadCancelled) {
-
-                            const { data: thumbPublicData } =
-                                supabaseClient
-                                    .storage
-                                    .from(BUCKET)
-                                    .getPublicUrl(thumbPath);
-
-                            thumbnailUrl =
-                                thumbPublicData?.publicUrl || "";
+                        if (uploadCancelled) {
+                            throw new Error(
+                                "Upload cancelled."
+                            );
                         }
+
+                        const {
+                            data: thumbPublicData,
+                            error: thumbPublicError
+                        } = supabaseClient
+                            .storage
+                            .from(BUCKET)
+                            .getPublicUrl(thumbPath);
+
+                        if (thumbPublicError) {
+                            throw thumbPublicError;
+                        }
+
+                        thumbnailUrl =
+                            thumbPublicData?.publicUrl || "";
                     }
 
                 } catch (thumbError) {
+
+                    if (
+                        thumbError.message ===
+                        "Upload cancelled."
+                    ) {
+                        throw thumbError;
+                    }
 
                     console.error(
                         "[ORO-THUMBNAIL ERROR]",
@@ -14071,6 +14153,14 @@ window.handlePost = async () => {
         }
 
         // 6. Save post information to Firestore
+        if (
+            typeof saveToFirestore !== "function"
+        ) {
+            throw new Error(
+                "saveToFirestore function hin argamne."
+            );
+        }
+
         await saveToFirestore(
             postText,
             mediaUrl,
@@ -14079,9 +14169,13 @@ window.handlePost = async () => {
         );
 
         // 7. Success
-        alert("Milkaa'inaan maxxanfameera! ✅");
+        alert(
+            "Milkaa'inaan maxxanfameera! ✅"
+        );
 
-        if (typeof resetUploadUI === "function") {
+        if (
+            typeof resetUploadUI === "function"
+        ) {
             resetUploadUI();
         }
 
@@ -14103,11 +14197,16 @@ window.handlePost = async () => {
 
             alert(
                 "Post maxxansuun hin milkoofne!\n\n" +
-                (err.message || "Dogoggora hin beekamne.")
+                (
+                    err.message ||
+                    "Dogoggora hin beekamne."
+                )
             );
         }
 
-        if (typeof resetUploadUI === "function") {
+        if (
+            typeof resetUploadUI === "function"
+        ) {
             resetUploadUI();
         }
 
@@ -14285,100 +14384,389 @@ function getVideoDuration(file) {
         video.src = URL.createObjectURL(file);
     });
 }
+// ==========================================
+// ORO-CONNECT SHORT VIDEOS - SUPABASE
+// ==========================================
+
 window.uploadShortVideo = async function(fileInput, captionInput) {
+
     const file = fileInput.files[0];
-    const caption = captionInput ? captionInput.value.trim() : "";
-    if (!auth.currentUser) return alert("Dura seenuu (login) kee mirkaneessi!");
-    if (!file || !file.type.startsWith('video/')) return alert("Maaloo faayilii viidiyoo sirrii filadhu!");
+    const caption = captionInput
+        ? captionInput.value.trim()
+        : "";
+
+    const user = auth.currentUser;
+
+    if (!user) {
+        return alert("Dura seenuu kee mirkaneessi!");
+    }
+
+    if (!file || !file.type.startsWith("video/")) {
+        return alert("Maaloo viidiyoo sirrii filadhu!");
+    }
+
     try {
+
+        // Viidiyoo dheerina isaa sakatta'uu
         const duration = await getVideoDuration(file);
+
         if (duration > 60) {
-            return alert("Viidiyoon gabaabaan (Reel) daqiiqaa 1 (sekoondii 60) caaluu hin danda'u!");
+            return alert(
+                "Viidiyoon gabaabaan sekondii 60 caaluu hin danda'u!"
+            );
         }
+
+        // Supabase connection mirkaneessuu
+        if (
+            typeof supabaseClient === "undefined" ||
+            !supabaseClient
+        ) {
+            throw new Error("Supabase connection hin argamne!");
+        }
+
+        // Video ID
         const videoId = doc(collection(db, "videos")).id;
-        const storageRef = ref(storage, `short_videos/${videoId}_${Date.now()}.mp4`);
-        const uploadTask = await uploadBytes(storageRef, file);
-        const videoUrl = await getDownloadURL(uploadTask.ref);
+
+        // File extension
+        const extension =
+            file.name.split(".").pop().toLowerCase();
+
+        // Supabase storage path
+        const filePath =
+            `short_videos/${user.uid}/${videoId}_${Date.now()}.${extension}`;
+
+        // Upload to Supabase
+        const { data, error } = await supabaseClient
+            .storage
+            .from("Oro-image")
+            .upload(filePath, file, {
+                contentType: file.type,
+                cacheControl: "3600",
+                upsert: false
+            });
+
+        if (error) {
+            throw error;
+        }
+
+        // Get public video URL
+        const { data: publicData } = supabaseClient
+            .storage
+            .from("Oro-image")
+            .getPublicUrl(data.path);
+
+        const videoUrl = publicData.publicUrl;
+
+        if (!videoUrl) {
+            throw new Error("Video URL hin argamne!");
+        }
+
+        // Save video information to Firestore
         await setDoc(doc(db, "videos", videoId), {
+
             id: videoId,
-            userId: auth.currentUser.uid,
-            userName: auth.currentUser.displayName || "Fayyadamaa OroConnect",
-            userPic: auth.currentUser.photoURL || "assets/img/default-profile.png",
+
+            userId: user.uid,
+
+            userName:
+                user.displayName || "Fayyadamaa OroConnect",
+
+            userPic:
+                user.photoURL || "assets/img/default-profile.png",
+
             videoUrl: videoUrl,
+
+            storagePath: data.path,
+
             caption: caption,
+
             duration: Math.round(duration),
+
             likes: [],
+
             likesCount: 0,
+
             sharesCount: 0,
+
             createdAt: serverTimestamp()
+
         });
-        alert("Viidiyoon gabaabaan milkaa'inaan maxxanfameera! 🎬");
-        if (captionInput) captionInput.value = "";
+
+        alert("Viidiyoon milkaa'inaan upload ta'eera! 🎬");
+
+        if (captionInput) {
+            captionInput.value = "";
+        }
+
         fileInput.value = "";
+
     } catch (error) {
-        console.error("Video Upload Error:", error);
-        alert("Viidiyoo maxxansuu irratti dogoggorri uumameera.");
+
+        console.error("Supabase Video Upload Error:", error);
+
+        alert(
+            "Viidiyoo upload gochuu irratti dogoggorri uumameera: " +
+            (error.message || "Unknown error")
+        );
     }
 };
+
+
+// ==========================================
+// LOAD SHORT VIDEOS
+// ==========================================
+
 window.shortVideosUnsubscribe = null;
+
 window.loadShortVideos = function() {
-    const container = document.getElementById('short-videos-container');
+
+    const container = document.getElementById(
+        "short-videos-container"
+    );
+
     if (!container) return;
+
     if (window.shortVideosUnsubscribe) {
         window.shortVideosUnsubscribe();
         window.shortVideosUnsubscribe = null;
     }
-    const q = query(collection(db, "videos"), orderBy("createdAt", "desc"), limit(20));
-    window.shortVideosUnsubscribe = onSnapshot(q, (snapshot) => {
-        if (snapshot.empty) {
-            container.innerHTML = `<div style="text-align:center; padding:40px; color:gray;">Viidiyoon gabaabaan tokkollee hin jiru. 🎥</div>`;
-            return;
-        }
-        let htmlContent = "";
-        const myUid = auth.currentUser ? auth.currentUser.uid : null;
-        snapshot.docs.forEach((docSnap) => {
-            const video = docSnap.data();
-            const isLiked = myUid && Array.isArray(video.likes) && video.likes.includes(myUid);
-            const likeIcon = isLiked ? '❤️' : '🤍';
-            const likeClass = isLiked ? 'liked' : '';
-            htmlContent += `
-                <div class="short-video-card" id="video-card-${video.id}" style="position: relative; margin-bottom: 20px; border-radius: 16px; overflow: hidden; background: #000;">
-                    <video src="${video.videoUrl}"
-                           loop
-                           playsinline
-                           onclick="this.paused ? this.play() : this.pause()"
-                           style="width: 100%; max-height: 80vh; object-fit: cover; display: block;">
-                    </video>
-                    <!-- Overlay Details & Buttons -->
-                    <div class="video-overlay" style="position: absolute; bottom: 0; left: 0; right: 0; padding: 15px; background: linear-gradient(transparent, rgba(0,0,0,0.8)); color: #fff; display: flex; justify-content: space-between; align-items: flex-end;">
-                        <div class="video-info" style="max-width: 75%;">
-                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-                                <img src="${video.userPic}" onerror="this.src='assets/img/default-profile.png'" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid #fff;">
-                                <b style="font-size: 14px; text-shadow: 0 1px 2px rgba(0,0,0,0.5);">@${video.userName}</b>
-                            </div>
-                            <p style="margin: 0; font-size: 13px; line-height: 1.3; opacity: 0.95;">${video.caption || ""}</p>
-                        </div>
-                        <div class="video-actions" style="display: flex; flex-direction: column; gap: 12px; align-items: center;">
-                            <!-- Like Button -->
-                            <button onclick="window.toggleLikeVideo('${video.id}')" style="background: rgba(255,255,255,0.2); border: none; color: #fff; border-radius: 50%; width: 44px; height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; backdrop-filter: blur(4px);">
-                                <span style="font-size: 18px;">${likeIcon}</span>
-                                <small style="font-size: 10px; margin-top: 2px;">${video.likesCount || 0}</small>
-                            </button>
-                            <!-- Share Button -->
-                            <button onclick="window.shareVideo('${video.id}', '${video.caption.replace(/'/g, "\\'")}', '${video.videoUrl}')" style="background: rgba(255,255,255,0.2); border: none; color: #fff; border-radius: 50%; width: 44px; height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; backdrop-filter: blur(4px);">
-                                <span style="font-size: 18px;">↪️</span>
-                                <small style="font-size: 10px; margin-top: 2px;">${video.sharesCount || 0}</small>
-                            </button>
-                        </div>
+
+    const q = query(
+        collection(db, "videos"),
+        orderBy("createdAt", "desc"),
+        limit(20)
+    );
+
+    window.shortVideosUnsubscribe = onSnapshot(
+        q,
+
+        (snapshot) => {
+
+            if (snapshot.empty) {
+
+                container.innerHTML = `
+                    <div style="text-align:center;padding:40px;color:gray;">
+                        Viidiyoon gabaabaan tokkollee hin jiru. 🎥
                     </div>
+                `;
+
+                return;
+            }
+
+            let htmlContent = "";
+
+            const myUid = auth.currentUser
+                ? auth.currentUser.uid
+                : null;
+
+            snapshot.docs.forEach((docSnap) => {
+
+                const video = docSnap.data();
+
+                const isLiked =
+                    myUid &&
+                    Array.isArray(video.likes) &&
+                    video.likes.includes(myUid);
+
+                const likeIcon = isLiked ? "❤️" : "🤍";
+
+                const safeCaption = String(
+                    video.caption || ""
+                ).replace(/[&<>"']/g, char => ({
+                    "&": "&amp;",
+                    "<": "&lt;",
+                    ">": "&gt;",
+                    '"': "&quot;",
+                    "'": "&#39;"
+                })[char]);
+
+                const safeName = String(
+                    video.userName || "Fayyadamaa"
+                ).replace(/[&<>"']/g, char => ({
+                    "&": "&amp;",
+                    "<": "&lt;",
+                    ">": "&gt;",
+                    '"': "&quot;",
+                    "'": "&#39;"
+                })[char]);
+
+                const safePic = String(
+                    video.userPic ||
+                    "assets/img/default-profile.png"
+                );
+
+                const safeUrl = String(video.videoUrl || "");
+
+                htmlContent += `
+
+                    <div
+                        class="short-video-card"
+                        id="video-card-${video.id}"
+                        style="
+                            position:relative;
+                            margin-bottom:20px;
+                            border-radius:16px;
+                            overflow:hidden;
+                            background:#000;
+                        "
+                    >
+
+                        <video
+                            src="${safeUrl}"
+                            loop
+                            playsinline
+                            controls
+                            preload="metadata"
+                            onclick="
+                                this.paused
+                                ? this.play()
+                                : this.pause()
+                            "
+                            style="
+                                width:100%;
+                                max-height:80vh;
+                                object-fit:cover;
+                                display:block;
+                            "
+                        ></video>
+
+                        <div
+                            class="video-overlay"
+                            style="
+                                position:absolute;
+                                bottom:0;
+                                left:0;
+                                right:0;
+                                padding:15px;
+                                background:linear-gradient(
+                                    transparent,
+                                    rgba(0,0,0,0.8)
+                                );
+                                color:#fff;
+                                display:flex;
+                                justify-content:space-between;
+                                align-items:flex-end;
+                            "
+                        >
+
+                            <div class="video-info" style="max-width:75%;">
+
+                                <div style="
+                                    display:flex;
+                                    align-items:center;
+                                    gap:8px;
+                                    margin-bottom:6px;
+                                ">
+
+                                    <img
+                                        src="${safePic}"
+                                        onerror="
+                                            this.src='assets/img/default-profile.png'
+                                        "
+                                        style="
+                                            width:36px;
+                                            height:36px;
+                                            border-radius:50%;
+                                            object-fit:cover;
+                                            border:2px solid #fff;
+                                        "
+                                    >
+
+                                    <b style="font-size:14px;">
+                                        @${safeName}
+                                    </b>
+
+                                </div>
+
+                                <p style="
+                                    margin:0;
+                                    font-size:13px;
+                                    line-height:1.3;
+                                ">
+                                    ${safeCaption}
+                                </p>
+
+                            </div>
+
+                            <div style="
+                                display:flex;
+                                flex-direction:column;
+                                gap:12px;
+                                align-items:center;
+                            ">
+
+                                <button
+                                    onclick="
+                                        window.toggleLikeVideo('${video.id}')
+                                    "
+                                    style="
+                                        background:rgba(255,255,255,.2);
+                                        border:none;
+                                        color:#fff;
+                                        border-radius:50%;
+                                        width:44px;
+                                        height:44px;
+                                        cursor:pointer;
+                                    "
+                                >
+                                    ${likeIcon}
+                                    <small>
+                                        ${video.likesCount || 0}
+                                    </small>
+                                </button>
+
+                                <button
+                                    onclick="
+                                        window.shareVideo(
+                                            '${video.id}',
+                                            this.dataset.caption,
+                                            this.dataset.url
+                                        )
+                                    "
+                                    data-caption="${safeCaption}"
+                                    data-url="${safeUrl}"
+                                    style="
+                                        background:rgba(255,255,255,.2);
+                                        border:none;
+                                        color:#fff;
+                                        border-radius:50%;
+                                        width:44px;
+                                        height:44px;
+                                        cursor:pointer;
+                                    "
+                                >
+                                    ↪️
+                                    <small>
+                                        ${video.sharesCount || 0}
+                                    </small>
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+                `;
+            });
+
+            container.innerHTML = htmlContent;
+
+        },
+
+        (error) => {
+
+            console.error(
+                "Short Videos Loading Error:",
+                error
+            );
+
+            container.innerHTML = `
+                <div style="color:#e74c3c;text-align:center;padding:20px;">
+                    Viidiyoo fiduu irratti dogoggorri uumameera.
                 </div>
             `;
-        });
-        container.innerHTML = htmlContent;
-    }, (err) => {
-        console.error("Short Videos Snapshot Error:", err);
-        container.innerHTML = `<div style="color:#e74c3c; text-align:center; padding:20px;">Viidiyoo fiduu irratti dogoggorri uumameera.</div>`;
-    });
+        }
+    );
 };
 window.toggleLikeVideo = async function(videoId) {
     if (!auth.currentUser) return alert("Dura seenuu (login) kee mirkaneessi!");
@@ -18379,11 +18767,6 @@ window.followUser = async (targetUid) => {
 let globalProfileListener = null;
 
 window.openUserProfile = async function (userId) {
-
-    /* =====================================================
-       1. FIREBASE INSTANCES
-    ===================================================== */
-
     const fAuth =
         window.AppService?.auth ||
         window.auth ||
@@ -20675,10 +21058,12 @@ window.updateFullProfile = async function () {
             }
         }
 
-        // 5. Existing photo URL
+        // 5. Existing profile photo URL
         let photoURL = String(
             oldData.photoURL ||
             oldData.userPic ||
+            oldData.photo ||
+            oldData.profilePic ||
             user.photoURL ||
             ""
         );
@@ -20717,7 +21102,7 @@ window.updateFullProfile = async function () {
 
             if (btn) {
                 btn.textContent =
-                    "Suuraa fe'aa jira... ⏳";
+                    "Suuraa Supabase irratti fe'aa jira... ⏳";
             }
 
             const extension = {
@@ -20733,16 +21118,17 @@ window.updateFullProfile = async function () {
                       Math.random().toString(36).slice(2);
 
             const filePath =
-                `${user.uid}/${uniqueName}.${extension}`;
+                `profiles/${user.uid}/${uniqueName}.${extension}`;
 
+            // Upload to Supabase
             const { data, error } = await supabaseClient
-    .storage
-    .from("Oro-image")
-    .upload(filePath, file, {
-        cacheControl: "3600",
-        contentType: file.type,
-        upsert: false
-    });
+                .storage
+                .from("Oro-image")
+                .upload(filePath, file, {
+                    cacheControl: "3600",
+                    contentType: file.type,
+                    upsert: false
+                });
 
             if (error) {
                 throw new Error(
@@ -20758,18 +21144,19 @@ window.updateFullProfile = async function () {
 
             // Get public URL
             const { data: publicData } =
-supabaseClient
-    .storage
-    .from("Oro-image")
-    .getPublicUrl(filePath);
+                supabaseClient
+                    .storage
+                    .from("Oro-image")
+                    .getPublicUrl(filePath);
 
-if (!publicData?.publicUrl) {
-    throw new Error(
-        "Supabase public URL hin argamne."
-    );
-}
+            if (!publicData?.publicUrl) {
+                throw new Error(
+                    "Supabase public URL hin argamne."
+                );
+            }
 
-mediaUrl = publicData.publicUrl;
+            // IMPORTANT: Save URL to photoURL
+            photoURL = publicData.publicUrl;
         }
 
         // 7. Update Firebase Authentication
@@ -23632,16 +24019,6 @@ window.deleteMessage = async (chatId, messageId) => {
     }
 };
 window.currentChatUnsubscribe=null;
-/* =====================================================
-   ORO CONNECT — PRODUCTION CHAT MESSAGE LOADER
-   Supports:
-   - Text messages
-   - Image messages
-   - Video messages
-   - Voice messages (mediaUrl / audioUrl)
-   - Realtime Firestore updates
-===================================================== */
-
 window.loadMessages = function (targetUid, targetName) {
 
     const chat = document.getElementById("chat-window");
