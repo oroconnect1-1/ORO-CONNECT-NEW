@@ -1,22 +1,22 @@
 name: Deploy ORO-CONNECT to Firebase Hosting
 
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+push:
+branches:
+- main
+workflow_dispatch:
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+deploy:
+runs-on: ubuntu-latest
+steps:
+- name: Checkout repository
+uses: actions/checkout@v4
 
-      - name: Deploy to Firebase Hosting
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
-                    projectId: oro-connect-1f468
-          channelId: live
-          entryPoint: .
+  - name: Deploy to Firebase Hosting
+    uses: FirebaseExtended/action-hosting-deploy@v0
+    with:
+      firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
+      projectId: oro-connect-1f468
+      channelId: live
+      entryPoint: .
