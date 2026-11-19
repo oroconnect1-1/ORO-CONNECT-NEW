@@ -8051,10 +8051,9 @@ console.info(
 );
 
 
-// ================================================
-// 7. ORO-CONNECT AI FRONTEND
-// CLOUDFLARE WORKER + GEMINI 2.5 FLASH
-// ================================================
+// ======================================================
+// ORO-CONNECT AI — COMPLETE FRONTEND SERVICE
+// ======================================================
 
 const ORO_AI_WORKER_URL =
     "https://oro-connect-ai.oroconnect1.workers.dev/";
@@ -8062,9 +8061,9 @@ const ORO_AI_WORKER_URL =
 const ORO_AI_TIMEOUT = 60000;
 
 
-// ================================================
+// ======================================================
 // ERROR HANDLER
-// ================================================
+// ======================================================
 
 function oroAIError(message, code = "ORO_AI_ERROR") {
 
@@ -8073,28 +8072,87 @@ function oroAIError(message, code = "ORO_AI_ERROR") {
     error.code = code;
 
     return error;
+
 }
 
 
-// ================================================
+// ======================================================
+// RESPONSE TEXT EXTRACTOR
+// ======================================================
+
+function extractOroAIResponse(result) {
+
+    if (!result || typeof result !== "object") {
+        return null;
+    }
+
+    // Worker response compatibility:
+    // { success: true, reply: "..." }
+    // { success: true, result: "..." }
+
+    const candidates = [
+        result.reply,
+        result.result,
+        result.response,
+        result.text,
+        result.output
+    ];
+
+    for (const value of candidates) {
+
+        if (
+            typeof value === "string" &&
+            value.trim().length > 0
+        ) {
+            return value.trim();
+        }
+
+    }
+
+    // Gemini-style response compatibility
+
+    const parts =
+        result.candidates?.[0]?.content?.parts || [];
+
+    const text = parts
+        .filter(part =>
+            typeof part.text === "string" &&
+            !part.thought
+        )
+        .map(part => part.text)
+        .join("\n")
+        .trim();
+
+    return text || null;
+
+}
+
+
+// ======================================================
 // CLOUDFLARE WORKER REQUEST
-// ================================================
+// ======================================================
 
 async function callOroAI(data) {
 
-    if (!data || typeof data !== "object") {
+    if (
+        !data ||
+        typeof data !== "object" ||
+        Array.isArray(data)
+    ) {
 
         throw oroAIError(
-            "Odeeffannoon AI kennamu sirrii miti."
+            "Odeeffannoon AI kennamu sirrii miti.",
+            "ORO_AI_INVALID_DATA"
         );
 
     }
 
     const controller = new AbortController();
 
-    const timeoutId = setTimeout(() => {
-        controller.abort();
-    }, ORO_AI_TIMEOUT);
+    const timeoutId = setTimeout(
+        () => controller.abort(),
+        ORO_AI_TIMEOUT
+    );
 
     try {
 
@@ -8102,26 +8160,27 @@ async function callOroAI(data) {
 
         try {
 
-            response = await fetch(ORO_AI_WORKER_URL, {
+            response = await fetch(
+                ORO_AI_WORKER_URL,
+                {
+                    method: "POST",
 
-                method: "POST",
+                    mode: "cors",
 
-                mode: "cors",
+                    credentials: "omit",
 
-                credentials: "omit",
+                    cache: "no-store",
 
-                cache: "no-store",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Accept": "application/json"
+                    },
 
-                headers: {
-                    "Content-Type": "application/json",
-                    "Accept": "application/json"
-                },
+                    body: JSON.stringify(data),
 
-                body: JSON.stringify(data),
-
-                signal: controller.signal
-
-            });
+                    signal: controller.signal
+                }
+            );
 
         } catch (error) {
 
@@ -8140,16 +8199,16 @@ async function callOroAI(data) {
             );
 
             throw oroAIError(
-                "ORO AI waliin walqunnamuun hin danda'amne. Internet, Cloudflare Worker fi CORS mirkaneessi.",
+                "ORO AI waliin walqunnamuun hin danda'amne. Internet, Worker fi CORS mirkaneessi.",
                 "ORO_AI_CONNECTION_ERROR"
             );
 
         }
 
 
-        // ----------------------------------------
-        // READ WORKER RESPONSE
-        // ----------------------------------------
+        // ------------------------------------------
+        // READ RESPONSE
+        // ------------------------------------------
 
         const responseText = await response.text();
 
@@ -8159,7 +8218,7 @@ async function callOroAI(data) {
 
             result = JSON.parse(responseText);
 
-        } catch {
+        } catch (error) {
 
             console.error(
                 "[ORO-AI INVALID JSON]",
@@ -8175,9 +8234,9 @@ async function callOroAI(data) {
         }
 
 
-        // ----------------------------------------
-        // HTTP ERROR HANDLING
-        // ----------------------------------------
+        // ------------------------------------------
+        // HTTP ERROR
+        // ------------------------------------------
 
         if (!response.ok) {
 
@@ -8187,42 +8246,54 @@ async function callOroAI(data) {
                 result
             );
 
-            const errorMessage =
-                typeof result?.error === "string"
-                    ? result.error
-                    : "ORO AI request hin milkoofne.";
-
             throw oroAIError(
-                errorMessage,
+                result?.message ||
+                result?.error ||
+                "ORO AI request hin milkoofne.",
                 "ORO_AI_HTTP_" + response.status
             );
 
         }
 
 
-        // ----------------------------------------
-        // RESPONSE VALIDATION
-        // ----------------------------------------
+        // ------------------------------------------
+        // API SUCCESS VALIDATION
+        // ------------------------------------------
 
-        if (
-            !result ||
-            typeof result.result !== "string" ||
-            !result.result.trim()
-        ) {
-
-            console.error(
-                "[ORO-AI INVALID RESPONSE]",
-                result
-            );
+        if (result.success === false) {
 
             throw oroAIError(
-                "Deebiin Gemini sirrii miti ykn duwwaa dha.",
-                "ORO_AI_INVALID_RESPONSE"
+                result.message ||
+                result.error ||
+                "Gemini request hin milkoofne.",
+                "ORO_AI_API_ERROR"
             );
 
         }
 
-        return result.result.trim();
+
+        // ------------------------------------------
+        // EXTRACT AI ANSWER
+        // ------------------------------------------
+
+        const answer = extractOroAIResponse(result);
+
+        if (!answer) {
+
+            console.error(
+                "[ORO-AI EMPTY RESPONSE]",
+                result
+            );
+
+            throw oroAIError(
+                result?.message ||
+                "Gemini deebii barruu hin kennine. Mee irra deebi'ii yaali.",
+                "ORO_AI_EMPTY_RESPONSE"
+            );
+
+        }
+
+        return answer;
 
 
     } catch (error) {
@@ -8244,9 +8315,9 @@ async function callOroAI(data) {
 }
 
 
-// ================================================
+// ======================================================
 // INPUT VALIDATION
-// ================================================
+// ======================================================
 
 function validateOroAIText(value, fieldName) {
 
@@ -8267,15 +8338,15 @@ function validateOroAIText(value, fieldName) {
 }
 
 
-// ================================================
+// ======================================================
 // AI SERVICE
-// ================================================
+// ======================================================
 
 window.OroAI = Object.freeze({
 
-    // --------------------------------------------
+    // ----------------------------------------------
     // CHATBOT
-    // --------------------------------------------
+    // ----------------------------------------------
 
     async chatWithBot(message, history = []) {
 
@@ -8293,14 +8364,17 @@ window.OroAI = Object.freeze({
 
         }
 
-        // History sirrii fi gabaabaa qofa ergi.
         const safeHistory = history
+
             .filter(item =>
                 item &&
                 ["user", "model"].includes(item.role) &&
-                typeof item.content === "string"
+                typeof item.content === "string" &&
+                item.content.trim()
             )
+
             .slice(-8)
+
             .map(item => ({
                 role: item.role,
                 content: item.content.slice(0, 4000)
@@ -8319,9 +8393,9 @@ window.OroAI = Object.freeze({
     },
 
 
-    // --------------------------------------------
+    // ----------------------------------------------
     // TEXT CORRECTION
-    // --------------------------------------------
+    // ----------------------------------------------
 
     async checkAndCorrectText(text) {
 
@@ -8341,9 +8415,9 @@ window.OroAI = Object.freeze({
     },
 
 
-    // --------------------------------------------
+    // ----------------------------------------------
     // TRANSLATION
-    // --------------------------------------------
+    // ----------------------------------------------
 
     async translate(text, language = "en") {
 
@@ -8373,16 +8447,16 @@ window.OroAI = Object.freeze({
 
             text: text.slice(0, 10000),
 
-            language
+            language: language
 
         });
 
     },
 
 
-    // --------------------------------------------
+    // ----------------------------------------------
     // CAPTION GENERATOR
-    // --------------------------------------------
+    // ----------------------------------------------
 
     async generateContentSuggestions(topic) {
 
@@ -8405,57 +8479,82 @@ window.OroAI = Object.freeze({
 
 
 console.info(
-    "[ORO-AI] Cloudflare Worker frontend initialized."
+    "[ORO-AI] Frontend service initialized."
 );
 
-console.info(
-    "[ORO-AI] Gemini 2.5 Flash service ready."
-);
-// ================================================
-// 8. ORO-CONNECT AI USER INTERFACE
-// ================================================
+
+// ======================================================
+// ORO-CONNECT AI USER INTERFACE
+// ======================================================
 
 let oroAIHistory = [];
 
 
+// ======================================================
 // OPEN AI PANEL
+// ======================================================
+
 window.openOroAI = function () {
 
     const panel = document.getElementById("oro-ai-panel");
 
     if (panel) {
+
         panel.hidden = false;
+
         panel.style.display = "flex";
 
-        document.getElementById("oro-ai-chat-input")?.focus();
+        document
+            .getElementById("oro-ai-chat-input")
+            ?.focus();
+
     } else {
-        console.error("[ORO-AI] Chat panel hin argamne.");
+
+        console.error(
+            "[ORO-AI] Chat panel hin argamne."
+        );
+
     }
 
 };
 
 
+// ======================================================
 // CLOSE AI PANEL
+// ======================================================
+
 window.closeOroAI = function () {
 
     const panel = document.getElementById("oro-ai-panel");
 
     if (panel) {
+
         panel.hidden = true;
+
         panel.style.display = "none";
+
     }
 
 };
 
 
+// ======================================================
 // DISPLAY CHAT MESSAGE
+// ======================================================
+
 function oroAIAddMessage(message, type) {
 
-    const container = document.getElementById("oro-ai-messages");
+    const container =
+        document.getElementById("oro-ai-messages");
 
     if (!container) {
-        console.error("[ORO-AI] Message container hin argamne.");
+
+        console.error(
+            "[ORO-AI] Message container hin argamne."
+        );
+
         return;
+
     }
 
     const bubble = document.createElement("div");
@@ -8471,211 +8570,370 @@ function oroAIAddMessage(message, type) {
 }
 
 
+// ======================================================
 // CHAT HISTORY
+// ======================================================
+
 function saveOroAIHistory(message, answer) {
 
     oroAIHistory.push(
-        { role: "user", content: message },
-        { role: "model", content: answer }
+
+        {
+            role: "user",
+            content: message
+        },
+
+        {
+            role: "model",
+            content: answer
+        }
+
     );
+
+    // Preserve the latest 8 messages.
 
     oroAIHistory = oroAIHistory.slice(-8);
 
 }
 
 
-// CHAT FORM
-document.addEventListener("DOMContentLoaded", function () {
+// ======================================================
+// CHAT FORM INITIALIZATION
+// ======================================================
 
-    const form = document.getElementById("oro-ai-chat-form");
+function initializeOroAIChat() {
 
-    if (!form || form.dataset.oroAIInitialized === "true") {
+    const form =
+        document.getElementById("oro-ai-chat-form");
+
+    if (
+        !form ||
+        form.dataset.oroAIInitialized === "true"
+    ) {
         return;
     }
 
     form.dataset.oroAIInitialized = "true";
 
-    form.addEventListener("submit", async function (event) {
+    form.addEventListener(
+        "submit",
+        async function (event) {
 
-        event.preventDefault();
+            event.preventDefault();
 
-        const input = document.getElementById("oro-ai-chat-input");
+            const input =
+                document.getElementById("oro-ai-chat-input");
 
-        if (!input) return;
+            if (!input) return;
 
-        const message = input.value.trim();
+            const message = input.value.trim();
 
-        if (!message) return;
+            if (!message) return;
 
-        input.value = "";
+            if (form.dataset.oroAISending === "true") {
+                return;
+            }
 
-        oroAIAddMessage(message, "user");
+            form.dataset.oroAISending = "true";
 
-        try {
+            input.value = "";
 
-            const answer = await window.OroAI.chatWithBot(
-                message,
-                oroAIHistory
-            );
+            oroAIAddMessage(message, "user");
 
-            oroAIAddMessage(answer, "ai");
+            try {
 
-            saveOroAIHistory(message, answer);
+                const answer =
+                    await window.OroAI.chatWithBot(
+                        message,
+                        oroAIHistory
+                    );
 
-        } catch (error) {
+                oroAIAddMessage(answer, "ai");
 
-            console.error("[ORO-AI CHAT]", error);
+                saveOroAIHistory(message, answer);
 
-            oroAIAddMessage(
-                "ORO AI: " + (error.message || "Dogoggorri uumame."),
-                "ai"
-            );
+            } catch (error) {
+
+                console.error(
+                    "[ORO-AI CHAT]",
+                    error
+                );
+
+                oroAIAddMessage(
+                    "ORO AI: " +
+                    (error.message || "Dogoggorri uumame."),
+                    "ai"
+                );
+
+            } finally {
+
+                form.dataset.oroAISending = "false";
+
+                input.focus();
+
+            }
 
         }
+    );
 
-    });
-
-});
+}
 
 
-// ================================================
+// Support both early and late script loading.
+
+if (document.readyState === "loading") {
+
+    document.addEventListener(
+        "DOMContentLoaded",
+        initializeOroAIChat,
+        { once: true }
+    );
+
+} else {
+
+    initializeOroAIChat();
+
+}
+
+
+// ======================================================
 // POST SPELL CHECK
-// ================================================
+// ======================================================
 
 window.oroAICorrectPost = async function () {
 
-    const textarea = document.getElementById("post-text");
-    const status = document.getElementById("oro-ai-post-status");
+    const textarea =
+        document.getElementById("post-text");
+
+    const status =
+        document.getElementById("oro-ai-post-status");
 
     const text = textarea?.value.trim();
 
     if (!text) {
-        if (status) status.textContent = "Barruu kee jalqaba barreessi.";
+
+        if (status) {
+            status.textContent =
+                "Barruu kee jalqaba barreessi.";
+        }
+
         return;
+
     }
 
     try {
 
-        if (status) status.textContent = "Qubee sirreessaa jira...";
+        if (status) {
+            status.textContent =
+                "Qubee sirreessaa jira...";
+        }
 
-        const corrected = await window.OroAI.checkAndCorrectText(text);
+        const corrected =
+            await window.OroAI.checkAndCorrectText(text);
 
         textarea.value = corrected;
 
-        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+        textarea.dispatchEvent(
+            new Event("input", { bubbles: true })
+        );
 
-        if (status) status.textContent = "Qubee sirreeffameera.";
+        if (status) {
+            status.textContent =
+                "Qubee sirreeffameera.";
+        }
 
     } catch (error) {
 
-        console.error("[ORO-AI CORRECTION]", error);
+        console.error(
+            "[ORO-AI CORRECTION]",
+            error
+        );
 
-        if (status) status.textContent = "Sirreessuun hin milkoofne: " + error.message;
+        if (status) {
+            status.textContent =
+                "Sirreessuun hin milkoofne: " +
+                error.message;
+        }
 
     }
 
 };
 
 
-// ================================================
+// ======================================================
 // TRANSLATION
-// ================================================
+// ======================================================
 
 window.oroAITranslatePost = async function () {
 
-    const textarea = document.getElementById("post-text");
+    const textarea =
+        document.getElementById("post-text");
 
     const language =
-        document.getElementById("oro-ai-translate-to")?.value || "en";
+        document.getElementById("oro-ai-translate-to")
+            ?.value || "en";
 
-    const status = document.getElementById("oro-ai-post-status");
+    const status =
+        document.getElementById("oro-ai-post-status");
 
     const text = textarea?.value.trim();
 
     if (!text) {
-        if (status) status.textContent = "Barruu hiikamu barreessi.";
+
+        if (status) {
+            status.textContent =
+                "Barruu hiikamu barreessi.";
+        }
+
         return;
+
     }
 
     try {
 
-        if (status) status.textContent = "Hiikaa jira...";
+        if (status) {
+            status.textContent = "Hiikaa jira...";
+        }
 
-        const translated = await window.OroAI.translate(text, language);
+        const translated =
+            await window.OroAI.translate(
+                text,
+                language
+            );
 
         textarea.value = translated;
 
-        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+        textarea.dispatchEvent(
+            new Event("input", { bubbles: true })
+        );
 
-        if (status) status.textContent = "Hiikkaan xumurameera.";
+        if (status) {
+            status.textContent =
+                "Hiikkaan xumurameera.";
+        }
 
     } catch (error) {
 
-        console.error("[ORO-AI TRANSLATION]", error);
+        console.error(
+            "[ORO-AI TRANSLATION]",
+            error
+        );
 
-        if (status) status.textContent = "Hiikuun hin milkoofne: " + error.message;
+        if (status) {
+            status.textContent =
+                "Hiikuun hin milkoofne: " +
+                error.message;
+        }
 
     }
 
 };
 
 
-// ================================================
+// ======================================================
 // CAPTION GENERATOR
-// ================================================
+// ======================================================
 
 window.oroAIGenerateCaption = async function () {
 
-    const textarea = document.getElementById("post-text");
+    const textarea =
+        document.getElementById("post-text");
 
-    const status = document.getElementById("oro-ai-post-status");
+    const status =
+        document.getElementById("oro-ai-post-status");
 
     const topic = textarea?.value.trim();
 
     if (!topic) {
-        if (status) status.textContent = "Mata-duree ykn yaada barreessi.";
+
+        if (status) {
+            status.textContent =
+                "Mata-duree ykn yaada barreessi.";
+        }
+
         return;
+
     }
 
     try {
 
-        if (status) status.textContent = "Caption qopheessaa jira...";
+        if (status) {
+            status.textContent =
+                "Caption qopheessaa jira...";
+        }
 
-        const caption = await window.OroAI.generateContentSuggestions(topic);
+        const caption =
+            await window.OroAI.generateContentSuggestions(
+                topic
+            );
 
         textarea.value = caption;
 
-        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+        textarea.dispatchEvent(
+            new Event("input", { bubbles: true })
+        );
 
-        if (status) status.textContent = "Caption qophaa'eera.";
+        if (status) {
+            status.textContent =
+                "Caption qophaa'eera.";
+        }
 
     } catch (error) {
 
-        console.error("[ORO-AI CAPTION]", error);
+        console.error(
+            "[ORO-AI CAPTION]",
+            error
+        );
 
-        if (status) status.textContent = "Caption qopheessuun hin milkoofne: " + error.message;
+        if (status) {
+            status.textContent =
+                "Caption qopheessuun hin milkoofne: " +
+                error.message;
+        }
 
     }
 
 };
 
-console.info("[ORO-AI] Chatbot and UI initialized.");
-// ================================================
-// 10. GLOBAL SANITIZER
-// ================================================
 
-window.sanitizeInput = function(input) {
+console.info(
+    "[ORO-AI] Chatbot and UI initialized."
+);
+
+
+// ======================================================
+// GLOBAL SANITIZER
+// ======================================================
+
+window.sanitizeInput = function (input) {
+
+    if (
+        !window.AppService ||
+        typeof window.AppService.sanitizeText !== "function"
+    ) {
+
+        console.error(
+            "[ORO-AI] AppService sanitizer unavailable."
+        );
+
+        return String(input ?? "");
+
+    }
 
     return window.AppService.sanitizeText(input);
 
 };
 
 
-// ================================================
-// 11. CENTRAL AUTH EVENT LISTENER
-// ================================================
+// ======================================================
+// CENTRAL AUTH EVENT LISTENER
+// ======================================================
 
-if (!window.__oroAuthListenerRegistered) {
+if (
+    !window.__oroAuthListenerRegistered &&
+    window.AppService &&
+    typeof window.AppService.onAuthStateChanged === "function"
+) {
 
     window.__oroAuthListenerRegistered = true;
 
@@ -8736,12 +8994,6 @@ if (!window.__oroAuthListenerRegistered) {
 console.info(
     "[ORO-CONNECT] Central services ready."
 );
-
-/* =========================================
-   REAL-TIME POSTS LISTENER
-   Start only when required and stop when
-   the feed is no longer needed.
-   ========================================= */
 
 window.startPostsListener = function(onPostsChanged) {
     if (typeof onPostsChanged !== "function") {
