@@ -16,10 +16,11 @@
       "firestore.rules",
       "storage.rules",
       "firestore.indexes.json",
+      "package.json",
+      "AndroidManifest.xml",
+      "cors.json",
       "functions/**",
       "android/**",
-      ".git/**",
-      ".firebase/**",
       "**/.*",
       "**/node_modules/**"
     ]
