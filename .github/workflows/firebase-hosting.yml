@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'Documents/ORO-CONNECT/**'
+      - '.github/workflows/firebase-hosting.yml'
 
   workflow_dispatch:
 
@@ -15,15 +18,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           projectId: oro-connect-1f468
           channelId: live
-          entryPoint: .
+          entryPoint: Documents/ORO-CONNECT
