@@ -7940,11 +7940,6 @@ const firebaseMethods = Object.freeze({
 // PRODUCTION-ORIENTED VERSION
 // ================================================
 
-
-// ================================================
-// 1. FIREBASE RTDB METHODS
-// ================================================
-
 const rtdbMethods = Object.freeze({
     ref: databaseRef,
     onValue,
@@ -8082,14 +8077,6 @@ for (const name of requiredRTDBFunctions) {
     }
 }
 
-
-// ================================================
-// 6. FIREBASE INITIALIZATION SUCCESS
-// ================================================
-// ========================================
-// FIREBASE REALTIME DATABASE INITIALIZATION
-// ========================================
-
 console.info(
     "[ORO-FIREBASE] Firebase AppService initialized."
 );
@@ -8097,1472 +8084,3930 @@ console.info(
 console.info(
     "[ORO-FIREBASE] Auth, Firestore, Storage and RTDB ready."
 );
-
-
-// ======================================================
-// ORO-CONNECT AI — COMPLETE FRONTEND SERVICE
-// ======================================================
-
-const ORO_AI_WORKER_URL =
-    "https://oro-connect-ai.oroconnect1.workers.dev/";
-
-const ORO_AI_TIMEOUT = 60000;
-
-
-// ======================================================
-// ERROR HANDLER
-// ======================================================
-
-function oroAIError(message, code = "ORO_AI_ERROR") {
-
-    const error = new Error(message);
-
-    error.code = code;
-
-    return error;
-
-}
-
-
-// ======================================================
-// RESPONSE TEXT EXTRACTOR
-// ======================================================
-
-function extractOroAIResponse(result) {
-
-    if (!result || typeof result !== "object") {
-        return null;
-    }
-
-    // Worker response compatibility:
-    // { success: true, reply: "..." }
-    // { success: true, result: "..." }
-
-    const candidates = [
-        result.reply,
-        result.result,
-        result.response,
-        result.text,
-        result.output
-    ];
-
-    for (const value of candidates) {
-
-        if (
-            typeof value === "string" &&
-            value.trim().length > 0
-        ) {
-            return value.trim();
-        }
-
-    }
-
-    // Gemini-style response compatibility
-
-    const parts =
-        result.candidates?.[0]?.content?.parts || [];
-
-    const text = parts
-        .filter(part =>
-            typeof part.text === "string" &&
-            !part.thought
-        )
-        .map(part => part.text)
-        .join("\n")
-        .trim();
-
-    return text || null;
-
-}
-
-
-// ======================================================
-// CLOUDFLARE WORKER REQUEST
-// ======================================================
-
-async function callOroAI(data) {
-    
-    if (
-        !data ||
-        typeof data !== "object" ||
-        Array.isArray(data)
-    ) {
-        throw oroAIError(
-            "Odeeffannoon AI kennamu sirrii miti.",
-            "ORO_AI_INVALID_DATA"
-        );
-    }
-    
-    // 1. FIREBASE AUTHENTICATION
-    
-    const auth = window.AppService?.auth;
-    const user = auth?.currentUser;
-    
-    if (!user) {
-        throw oroAIError(
-            "Maaloo dura ORO-CONNECT keessatti seeni.",
-            "ORO_AI_AUTH_REQUIRED"
-        );
-    }
-    
-    let idToken;
-    
-    try {
-        idToken = await user.getIdToken();
-    } catch (error) {
-        throw oroAIError(
-            "Token Firebase argachuun hin danda'amne. Irra deebi'ii seeni.",
-            "ORO_AI_TOKEN_ERROR"
-        );
-    }
-    
-    if (!idToken) {
-        throw oroAIError(
-            "Firebase authentication token hin argamne.",
-            "ORO_AI_INVALID_TOKEN"
-        );
-    }
-    
-    // 2. REQUEST TIMEOUT
-    
-    const controller = new AbortController();
-    
-    const timeoutId = setTimeout(
-        () => controller.abort(),
-        ORO_AI_TIMEOUT
-    );
-    
-    try {
-        
-        let response;
-        
-        try {
-            
-            response = await fetch(
-                ORO_AI_WORKER_URL,
-                {
-                    method: "POST",
-                    mode: "cors",
-                    credentials: "omit",
-                    cache: "no-store",
-                    
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Accept": "application/json",
-                        "Authorization": "Bearer " + idToken
-                    },
-                    
-                    body: JSON.stringify(data),
-                    signal: controller.signal
-                }
-            );
-            
-        } catch (error) {
-            
-            if (error?.name === "AbortError") {
-                throw oroAIError(
-                    "ORO AI yeroo eegame keessatti deebii hin kennine.",
-                    "ORO_AI_TIMEOUT"
-                );
-            }
-            
-            console.error("[ORO-AI NETWORK DIAGNOSTICS]", {
-                name: error?.name,
-                message: error?.message,
-                origin: window.location.origin,
-                worker: ORO_AI_WORKER_URL,
-                online: navigator.onLine
-            });
-            
-            throw oroAIError(
-                "ORO AI connection error: " +
-                (error?.message || error?.name || "Unknown error"),
-                "ORO_AI_CONNECTION_ERROR"
-            );
-        }
-        
-        // 3. READ RESPONSE
-        
-        const responseText = await response.text();
-        
-        let result;
-        
-        try {
-            result = JSON.parse(responseText);
-        } catch (error) {
-            
-            console.error(
-                "[ORO-AI INVALID JSON]",
-                response.status,
-                responseText.slice(0, 500)
-            );
-            
-            throw oroAIError(
-                "Cloudflare Worker deebii JSON sirrii hin deebifne.",
-                "ORO_AI_INVALID_JSON"
-            );
-        }
-        
-        // 4. HTTP ERROR
-        
-        if (!response.ok) {
-            
-            console.error(
-                "[ORO-AI HTTP ERROR]",
-                response.status,
-                result
-            );
-            
-            throw oroAIError(
-                result?.message ||
-                result?.error ||
-                "ORO AI request hin milkoofne.",
-                "ORO_AI_HTTP_" + response.status
-            );
-        }
-        
-        // 5. API SUCCESS VALIDATION
-        
-        if (result.success !== true) {
-            
-            throw oroAIError(
-                result?.message ||
-                result?.error ||
-                "ORO AI request hin milkoofne.",
-                "ORO_AI_API_ERROR"
-            );
-        }
-        
-        // 6. SAVE PROVIDER INFORMATION
-        
-        window.__ORO_AI_LAST_RESULT__ = {
-            provider: result.provider || null,
-            modelUsed: result.modelUsed || null,
-            modelsUsed: result.modelsUsed || [],
-            aiMode: result.aiMode || data.aiMode || "auto",
-            fallback: result.fallback === true,
-            collaboration: result.collaboration || null,
-            task: result.task || data.task || "chat"
-        };
-        
-        // 7. EXTRACT AI ANSWER
-        
-        const answer = extractOroAIResponse(result);
-        
-        if (!answer) {
-            
-            console.error(
-                "[ORO-AI EMPTY RESPONSE]",
-                result
-            );
-            
-            throw oroAIError(
-                "ORO AI deebii barruu hin kennine. Mee irra deebi'ii yaali.",
-                "ORO_AI_EMPTY_RESPONSE"
-            );
-        }
-        
-        return answer;
-        
-    } catch (error) {
-        
-        console.error(
-            "[ORO-AI REQUEST ERROR]",
-            error.code || error.name,
-            error.message
-        );
-        
-        throw error;
-        
-    } finally {
-        
-        clearTimeout(timeoutId);
-        
-    }
-    
-}
-// ======================================================
-// INPUT VALIDATION
-// ======================================================
-
-function validateOroAIText(value, fieldName) {
-
-    if (
-        typeof value !== "string" ||
-        !value.trim()
-    ) {
-
-        throw oroAIError(
-            fieldName + " galchi.",
-            "ORO_AI_INVALID_INPUT"
-        );
-
-    }
-
-    return value.trim();
-
-}
-
-
-// ======================================================
-// AI SERVICE
-// ======================================================
-
-// ======================================================
-// ORO-CONNECT DUAL AI SERVICE
+// ============================================================
+// ORO-AI — ORO-CONNECT DUAL AI SYSTEM
 // GEMINI + CHATGPT
-// ======================================================
+// PRODUCTION FRONTEND — WORKER COMPATIBLE
+// ============================================================
 
-window.OroAI = Object.freeze({
+(function (window, document) {
+    "use strict";
 
-    // ----------------------------------------------
-    // AI MODE VALIDATION
-    // ----------------------------------------------
+    // ========================================================
+    // CONFIGURATION
+    // ========================================================
 
-    validateMode(aiMode = "auto") {
+    const CONFIG = Object.freeze({
 
-        const allowedModes = [
-            "auto",
-            "collaborate",
-            "gemini",
-            "openai"
-        ];
+        workerURL:
+            "https://oro-connect-ai.oroconnect1.workers.dev/",
 
-        if (!allowedModes.includes(aiMode)) {
+        timeout: 120000,
 
-            throw oroAIError(
-                "AI mode filatame sirrii miti.",
-                "ORO_AI_INVALID_MODE"
-            );
+        maxRetries: 1,
 
-        }
+        maxHistory: 8,
 
-        return aiMode;
-    },
+        maxFirestoreHistory: 30,
 
+        maxTextLength: 10000,
 
-    // ----------------------------------------------
-    // CHATBOT
-    // ----------------------------------------------
+        retryDelay: 1200,
 
-    async chatWithBot(
-        message,
-        history = [],
-        aiMode = "auto"
-    ) {
+        maxImageMB: 10,
 
-        message = validateOroAIText(
-            message,
-            "Ergaa AI'if kennamu"
-        );
+        allowedImageTypes: [
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "image/gif"
+        ]
 
-        if (!Array.isArray(history)) {
-
-            throw oroAIError(
-                "Chat history sirrii miti.",
-                "ORO_AI_INVALID_HISTORY"
-            );
-
-        }
-
-        aiMode = this.validateMode(aiMode);
-
-        const safeHistory = history
-
-            .filter(item =>
-                item &&
-                ["user", "model"].includes(item.role) &&
-                typeof item.content === "string" &&
-                item.content.trim()
-            )
-
-            .slice(-8)
-
-            .map(item => ({
-                role: item.role,
-                content: item.content.slice(0, 4000)
-            }));
-
-        return await callOroAI({
-
-            task: "chat",
-
-            aiMode,
-
-            message: message.slice(0, 10000),
-
-            history: safeHistory
-
-        });
-
-    },
-
-
-    // ----------------------------------------------
-    // TEXT CORRECTION
-    // ----------------------------------------------
-
-    async checkAndCorrectText(
-        text,
-        aiMode = "auto"
-    ) {
-
-        text = validateOroAIText(
-            text,
-            "Barruu sirreeffamu"
-        );
-
-        aiMode = this.validateMode(aiMode);
-
-        return await callOroAI({
-
-            task: "correct",
-
-            aiMode,
-
-            text: text.slice(0, 10000)
-
-        });
-
-    },
-
-
-    // ----------------------------------------------
-    // TRANSLATION
-    // ----------------------------------------------
-
-    async translate(
-        text,
-        language = "en",
-        aiMode = "auto"
-    ) {
-
-        text = validateOroAIText(
-            text,
-            "Barruu hiikamu"
-        );
-
-        const allowedLanguages = [
-            "om",
-            "en",
-            "am"
-        ];
-
-        if (!allowedLanguages.includes(language)) {
-
-            throw oroAIError(
-                "Afaan filatame hin deeggaramu.",
-                "ORO_AI_INVALID_LANGUAGE"
-            );
-
-        }
-
-        aiMode = this.validateMode(aiMode);
-
-        return await callOroAI({
-
-            task: "translate",
-
-            aiMode,
-
-            text: text.slice(0, 10000),
-
-            language
-
-        });
-
-    },
-
-
-    // ----------------------------------------------
-    // CAPTION GENERATOR
-    // ----------------------------------------------
-
-    async generateContentSuggestions(
-        topic,
-        aiMode = "auto"
-    ) {
-
-        topic = validateOroAIText(
-            topic,
-            "Mata-duree"
-        );
-
-        aiMode = this.validateMode(aiMode);
-
-        return await callOroAI({
-
-            task: "caption",
-
-            aiMode,
-
-            topic: topic.slice(0, 5000)
-
-        });
-
-    },
-
-
-    // ----------------------------------------------
-    // SMART REPLY
-    // ----------------------------------------------
-
-    async smartReply(
-        message,
-        aiMode = "auto"
-    ) {
-
-        message = validateOroAIText(
-            message,
-            "Ergaa deebii itti qophaa'u"
-        );
-
-        aiMode = this.validateMode(aiMode);
-
-        return await callOroAI({
-
-            task: "smart_reply",
-
-            aiMode,
-
-            message: message.slice(0, 5000)
-
-        });
-
-    },
-
-
-    // ----------------------------------------------
-    // GEMINI + CHATGPT COLLABORATION
-    // ----------------------------------------------
-
-    async collaborate(message, history = []) {
-
-        return await this.chatWithBot(
-            message,
-            history,
-            "collaborate"
-        );
-
-    },
-
-
-    // ----------------------------------------------
-    // GEMINI ONLY
-    // ----------------------------------------------
-
-    async useGemini(message, history = []) {
-
-        return await this.chatWithBot(
-            message,
-            history,
-            "gemini"
-        );
-
-    },
-
-
-    // ----------------------------------------------
-    // CHATGPT ONLY
-    // ----------------------------------------------
-
-    async useChatGPT(message, history = []) {
-
-        return await this.chatWithBot(
-            message,
-            history,
-            "openai"
-        );
-
-    }
-
-});
-
-
-console.info(
-    "[ORO-AI] Gemini + ChatGPT dual-AI service initialized."
-);
-
-// ======================================================
-// ORO-CONNECT AI USER INTERFACE
-// ======================================================
-
-let oroAIHistory = [];
-
-
-// ======================================================
-// ORO AI MODE SELECTOR
-// ======================================================
-
-window.oroAISelectedMode = "auto";
-
-function initializeOroAIModeSelector() {
-    
-    const form = document.getElementById("oro-ai-chat-form");
-    const panel = document.getElementById("oro-ai-panel");
-    
-    if (!form || !panel) return;
-    
-    if (document.getElementById("oro-ai-mode-selector")) {
-        return;
-    }
-    
-    const wrapper = document.createElement("div");
-    wrapper.id = "oro-ai-mode-wrapper";
-    wrapper.style.cssText = `
-        display:flex;
-        align-items:center;
-        gap:8px;
-        padding:8px 12px;
-        flex-wrap:wrap;
-    `;
-    
-    const label = document.createElement("label");
-    label.htmlFor = "oro-ai-mode-selector";
-    label.textContent = "AI:";
-    label.style.fontWeight = "600";
-    
-    const select = document.createElement("select");
-    select.id = "oro-ai-mode-selector";
-    select.style.cssText = `
-        padding:8px 12px;
-        border-radius:8px;
-        max-width:100%;
-    `;
-    
-    const modes = [
-        ["auto", "Auto — Gemini → ChatGPT"],
-        ["collaborate", "Gemini + ChatGPT waliin"],
-        ["gemini", "Gemini qofa"],
-        ["openai", "ChatGPT qofa"]
-    ];
-    
-    modes.forEach(([value, text]) => {
-        const option = document.createElement("option");
-        option.value = value;
-        option.textContent = text;
-        select.appendChild(option);
     });
-    
-    select.value = window.oroAISelectedMode;
-    
-    select.addEventListener("change", () => {
-        window.oroAISelectedMode = select.value;
-    });
-    
-    wrapper.append(label, select);
-    
-    panel.insertBefore(wrapper, form);
-}
-
-window.openOroAI = function () {
-
-    const panel = document.getElementById("oro-ai-panel");
-
-    if (panel) {
-
-        panel.hidden = false;
-
-        panel.style.display = "flex";
-
-        document
-            .getElementById("oro-ai-chat-input")
-            ?.focus();
-
-    } else {
-
-        console.error(
-            "[ORO-AI] Chat panel hin argamne."
-        );
-
-    }
-
-};
 
 
-// ======================================================
-// CLOSE AI PANEL
-// ======================================================
+    // ========================================================
+    // DUPLICATE INITIALIZATION PROTECTION
+    // ========================================================
 
-window.closeOroAI = function () {
+    if (window.__ORO_AI_PRODUCTION_INITIALIZED__) {
 
-    const panel = document.getElementById("oro-ai-panel");
-
-    if (panel) {
-
-        panel.hidden = true;
-
-        panel.style.display = "none";
-
-    }
-
-};
-
-
-// ======================================================
-// DISPLAY CHAT MESSAGE
-// ======================================================
-
-function oroAIAddMessage(message, type) {
-
-    const container =
-        document.getElementById("oro-ai-messages");
-
-    if (!container) {
-
-        console.error(
-            "[ORO-AI] Message container hin argamne."
+        console.warn(
+            "[ORO-AI] Already initialized."
         );
 
         return;
 
     }
 
-    const bubble = document.createElement("div");
-
-    bubble.className = "oro-ai-bubble " + type;
-
-    bubble.textContent = String(message);
-
-    container.appendChild(bubble);
-
-    container.scrollTop = container.scrollHeight;
-
-}
+    window.__ORO_AI_PRODUCTION_INITIALIZED__ = true;
 
 
-// ======================================================
-// CHAT HISTORY
-// ======================================================
+    // ========================================================
+    // LOCAL USAGE LIMITS — UX ONLY
+    // WORKER MUST ENFORCE REAL LIMITS
+    // ========================================================
 
-function saveOroAIHistory(message, answer) {
+    const LIMITS = Object.freeze({
 
-    oroAIHistory.push(
+        free: {
 
-        {
-            role: "user",
-            content: message
+            perMinute: 6,
+
+            perDay: 40,
+
+            maxImageMB: 4
+
         },
 
-        {
-            role: "model",
-            content: answer
+        pro: {
+
+            perMinute: 25,
+
+            perDay: 300,
+
+            maxImageMB: 10
+
+        },
+
+        admin: {
+
+            perMinute: 120,
+
+            perDay: 5000,
+
+            maxImageMB: 10
+
         }
 
-    );
-
-    // Preserve the latest 8 messages.
-
-    oroAIHistory = oroAIHistory.slice(-8);
-
-}
-
-
-// ======================================================
-// CHAT FORM INITIALIZATION
-// ======================================================
-
-function initializeOroAIChat() {
-    
-    const form = document.getElementById("oro-ai-chat-form");
-    
-    if (
-        !form ||
-        form.dataset.oroAIInitialized === "true"
-    ) {
-        return;
-    }
-    
-    initializeOroAIModeSelector();
-    
-    form.dataset.oroAIInitialized = "true";
-    
-    form.addEventListener("submit", async function(event) {
-        
-        event.preventDefault();
-        
-        const input = document.getElementById("oro-ai-chat-input");
-        
-        if (!input) return;
-        
-        const message = input.value.trim();
-        
-        if (!message) return;
-        
-        if (form.dataset.oroAISending === "true") return;
-        
-        form.dataset.oroAISending = "true";
-        
-        input.value = "";
-        
-        oroAIAddMessage(message, "user");
-        
-        try {
-            
-            const selectedMode =
-                window.oroAISelectedMode || "auto";
-            
-            const answer = await window.OroAI.chatWithBot(
-                message,
-                oroAIHistory,
-                selectedMode
-            );
-            
-            oroAIAddMessage(answer, "ai");
-            
-            saveOroAIHistory(message, answer);
-            
-            // Show which AI provider handled the request.
-            const info = window.__ORO_AI_LAST_RESULT__;
-            
-            if (info) {
-                console.info("[ORO-AI PROVIDER]", info);
-            }
-            
-        } catch (error) {
-            
-            console.error("[ORO-AI CHAT]", error);
-            
-            oroAIAddMessage(
-                "ORO AI: " +
-                (error.message || "Dogoggorri uumame."),
-                "ai"
-            );
-            
-        } finally {
-            
-            form.dataset.oroAISending = "false";
-            
-            input.focus();
-            
-        }
-        
     });
-    
-}
 
-// Support both early and late script loading.
 
-if (document.readyState === "loading") {
+    // ========================================================
+    // STATE
+    // ========================================================
 
-    document.addEventListener(
-        "DOMContentLoaded",
-        initializeOroAIChat,
-        { once: true }
-    );
+    let oroAIHistory = [];
 
-} else {
+    let activeSessionId = null;
 
-    initializeOroAIChat();
+    let currentUserId = null;
 
-}
+    let activeController = null;
 
-// ======================================================
-// ORO-CONNECT MESSENGER SMART REPLY
-// ======================================================
+    let selectedMode = "auto";
 
-function initializeOroSmartReply() {
+    let historyLoadPromise = null;
 
-    const composer = document.querySelector(
-        ".chat-message-composer"
-    );
+    let historyLoadUid = null;
 
-    if (!composer) return;
+    let historyGeneration = 0;
 
-    if (document.getElementById("oro-smart-reply-btn")) {
-        return;
+
+    // ========================================================
+    // ERROR HANDLING
+    // ========================================================
+
+    function createError(
+        message,
+        code = "ORO_AI_ERROR"
+    ) {
+
+        const error = new Error(message);
+
+        error.code = code;
+
+        return error;
+
     }
 
-    // ------------------------------------------
-    // SMART REPLY BUTTON
-    // ------------------------------------------
 
-    const button = document.createElement("button");
+    // ========================================================
+    // FIREBASE SERVICES
+    // ========================================================
 
-    button.id = "oro-smart-reply-btn";
-    button.type = "button";
-    button.textContent = "✨ AI Reply";
-    button.title = "AI'n deebii ergaa qopheessi";
+    function getFirebase() {
 
-    button.style.cssText = `
-        padding: 8px 10px;
-        border: none;
-        border-radius: 9px;
-        cursor: pointer;
-        font-size: 13px;
-        font-weight: 600;
-        flex-shrink: 0;
-    `;
+        const app = window.AppService || {};
 
-    // ------------------------------------------
-    // SMART REPLY PANEL
-    // ------------------------------------------
+        return {
 
-    const panel = document.createElement("div");
+            app,
 
-    panel.id = "oro-smart-reply-panel";
-    panel.hidden = true;
+            auth: app.auth || null,
 
-    panel.style.cssText = `
-        display: none;
-        padding: 12px;
-        margin: 8px 0;
-        border-radius: 12px;
-        background: var(--card-bg, #242526);
-        border: 1px solid rgba(128,128,128,.25);
-    `;
+            db: app.db || null,
 
-    const title = document.createElement("strong");
-    title.textContent = "✨ ORO AI Smart Reply";
+            methods: app.methods || {}
 
-    const output = document.createElement("textarea");
+        };
 
-    output.id = "oro-smart-reply-output";
-    output.readOnly = false;
-    output.rows = 5;
-    output.placeholder = "AI deebii qopheessaa jira...";
+    }
 
-    output.style.cssText = `
-        width: 100%;
-        box-sizing: border-box;
-        margin-top: 10px;
-        padding: 10px;
-        border-radius: 8px;
-        resize: vertical;
-    `;
 
-    const useButton = document.createElement("button");
+    // ========================================================
+    // AUTHENTICATION
+    // ========================================================
 
-    useButton.type = "button";
-    useButton.textContent = "Deebii kana fayyadami";
+    async function getAuthenticatedUser() {
 
-    useButton.style.cssText = `
-        margin-top: 8px;
-        padding: 9px 14px;
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-    `;
+        const firebase = getFirebase();
 
-    const closeButton = document.createElement("button");
+        const user =
+            firebase.auth?.currentUser ||
+            window.currentUser;
 
-    closeButton.type = "button";
-    closeButton.textContent = "Cufi";
+        if (!user) {
 
-    closeButton.style.cssText = `
-        margin: 8px;
-        padding: 9px 14px;
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-    `;
+            throw createError(
+                "Maaloo dura ORO-CONNECT keessa seeni.",
+                "AUTH_REQUIRED"
+            );
 
-    panel.append(
-        title,
-        output,
-        useButton,
-        closeButton
-    );
-
-    composer.parentNode.insertBefore(
-        panel,
-        composer
-    );
-
-    composer.insertBefore(
-        button,
-        composer.firstChild
-    );
-
-    // ------------------------------------------
-    // FIND LATEST RECEIVED MESSAGE
-    // ------------------------------------------
-
-    function getLatestIncomingMessage() {
-    
-    const container = document.getElementById(
-        "chat-messages-stream"
-    );
-    
-    if (!container) return "";
-    
-    const messages = container.querySelectorAll(
-        ".message-wrapper"
-    );
-    
-    for (let i = messages.length - 1; i >= 0; i--) {
-        
-        const wrapper = messages[i];
-        
-        // Ergaa keenya of keessaa baasi.
-        if (wrapper.dataset.isMine !== "false") {
-            continue;
         }
-        
-        // Text qofa irratti hojjedhu.
+
         if (
-            wrapper.dataset.messageType !== "text" &&
-            wrapper.dataset.messageType !== ""
+            typeof user.getIdTokenResult !== "function" ||
+            !user.uid
         ) {
-            continue;
-        }
-        
-        const bubble = wrapper.querySelector(
-            ".message-bubble"
-        );
-        
-        const paragraph = bubble?.querySelector("p");
-        
-        const message = paragraph?.textContent?.trim();
-        
-        if (message) {
-            return message.slice(0, 5000);
-        }
-    }
-    
-    return "";
-}
-    // ------------------------------------------
-    // GENERATE SMART REPLY
-    // ------------------------------------------
 
-    button.addEventListener("click", async () => {
+            throw createError(
+                "Firebase Authentication sirnaan hin qophoofne.",
+                "INVALID_AUTH"
+            );
 
-        const incomingMessage = getLatestIncomingMessage();
-
-        if (!incomingMessage) {
-
-            output.value =
-                "Ergaan nama biraa deebii itti qopheessinu hin argamne.";
-
-            panel.hidden = false;
-            panel.style.display = "block";
-
-            return;
         }
 
-        button.disabled = true;
-        button.textContent = "⏳ AI...";
+        let token;
 
-        panel.hidden = false;
-        panel.style.display = "block";
-
-        output.value = "Gemini fi ChatGPT deebii qopheessaa jiru...";
+        let claims = {};
 
         try {
 
-            const mode =
-                window.oroAISelectedMode || "auto";
+            const tokenResult =
+                await user.getIdTokenResult();
 
-            const suggestions =
-                await window.OroAI.smartReply(
-                    incomingMessage,
-                    mode
-                );
+            token = tokenResult?.token;
 
-            output.value = suggestions;
+            claims = tokenResult?.claims || {};
 
         } catch (error) {
 
             console.error(
-                "[ORO-SMART-REPLY]",
+                "[ORO-AI AUTH]",
                 error
             );
 
-            output.value =
-                "Deebii qopheessuun hin milkoofne: " +
-                error.message;
-
-        } finally {
-
-            button.disabled = false;
-            button.textContent = "✨ AI Reply";
+            throw createError(
+                "Authentication token argachuun hin danda'amne.",
+                "TOKEN_ERROR"
+            );
 
         }
 
-    });
+        if (!token) {
 
-    // ------------------------------------------
-    // USE GENERATED REPLY
-    // ------------------------------------------
+            throw createError(
+                "Authentication token hin argamne.",
+                "INVALID_TOKEN"
+            );
 
-    useButton.addEventListener("click", () => {
+        }
 
-        const input = document.getElementById(
-            "chat-msg-input"
+
+        // NOTE:
+        // This tier is for frontend UX only.
+        // Worker must independently verify user permissions.
+
+        let tier = "free";
+
+        if (claims.admin === true) {
+
+            tier = "admin";
+
+        } else if (
+            claims.tier === "pro" ||
+            claims.subscription === "pro"
+        ) {
+
+            tier = "pro";
+
+        }
+
+
+        return {
+
+            user,
+
+            uid: user.uid,
+
+            token,
+
+            tier
+
+        };
+
+    }
+
+
+
+
+// ========================================================
+// ORO-AI MODE VALIDATION
+// ========================================================
+
+function validateMode(mode = "auto") {
+    const allowed = ["auto", "fast", "smart", "advanced"];
+    
+    if (!allowed.includes(mode)) {
+        throw createError(
+            "ORO-AI mode filatame sirrii miti.",
+            "INVALID_MODE"
         );
-
-        const reply = output.value.trim();
-
-        if (!input || !reply) return;
-
-        input.value = reply;
-
-        input.dispatchEvent(
-            new Event("input", { bubbles: true })
-        );
-
-        panel.hidden = true;
-        panel.style.display = "none";
-
-        input.focus();
-
-    });
-
-    closeButton.addEventListener("click", () => {
-
-        panel.hidden = true;
-        panel.style.display = "none";
-
-    });
-
+    }
+    
+    return mode;
 }
-
-
-// ======================================================
-// INITIALIZE SMART REPLY
-// ======================================================
-
-function initializeOroSmartReplyWhenReady() {
-
-    initializeOroSmartReply();
-
-    if (!window.__oroSmartReplyObserver) {
-
-        window.__oroSmartReplyObserver =
-            new MutationObserver(() => {
-                initializeOroSmartReply();
-            });
-
-        window.__oroSmartReplyObserver.observe(
-            document.body,
-            {
-                childList: true,
-                subtree: true
-            }
-        );
-
-    }
-
-}
-
-if (document.readyState === "loading") {
-
-    document.addEventListener(
-        "DOMContentLoaded",
-        initializeOroSmartReplyWhenReady,
-        { once: true }
-    );
-
-} else {
-
-    initializeOroSmartReplyWhenReady();
-
-}
-// ======================================================
-// POST SPELL CHECK
-// ======================================================
-
-window.oroAICorrectPost = async function () {
-
-    const textarea =
-        document.getElementById("post-text");
-
-    const status =
-        document.getElementById("oro-ai-post-status");
-
-    const text = textarea?.value.trim();
-
-    if (!text) {
-
-        if (status) {
-            status.textContent =
-                "Barruu kee jalqaba barreessi.";
-        }
-
-        return;
-
-    }
-
-    try {
-
-        if (status) {
-            status.textContent =
-                "Qubee sirreessaa jira...";
-        }
-
-        const corrected =
-    await window.OroAI.checkAndCorrectText(
-        text,
-        window.oroAISelectedMode || "auto"
-    );
-
-        textarea.value = corrected;
-
-        textarea.dispatchEvent(
-            new Event("input", { bubbles: true })
-        );
-
-        if (status) {
-            status.textContent =
-                "Qubee sirreeffameera.";
-        }
-
-    } catch (error) {
-
-        console.error(
-            "[ORO-AI CORRECTION]",
-            error
-        );
-
-        if (status) {
-            status.textContent =
-                "Sirreessuun hin milkoofne: " +
-                error.message;
-        }
-
-    }
-
-};
-
-
-// ======================================================
-// TRANSLATION
-// ======================================================
-
-window.oroAITranslatePost = async function () {
-
-    const textarea =
-        document.getElementById("post-text");
-
-    const language =
-        document.getElementById("oro-ai-translate-to")
-            ?.value || "en";
-
-    const status =
-        document.getElementById("oro-ai-post-status");
-
-    const text = textarea?.value.trim();
-
-    if (!text) {
-
-        if (status) {
-            status.textContent =
-                "Barruu hiikamu barreessi.";
-        }
-
-        return;
-
-    }
-
-    try {
-
-        if (status) {
-            status.textContent = "Hiikaa jira...";
-        }
-
-        const translated =
-    await window.OroAI.translate(
-        text,
-        language,
-        window.oroAISelectedMode || "auto"
-    );
-
-        textarea.value = translated;
-
-        textarea.dispatchEvent(
-            new Event("input", { bubbles: true })
-        );
-
-        if (status) {
-            status.textContent =
-                "Hiikkaan xumurameera.";
-        }
-
-    } catch (error) {
-
-        console.error(
-            "[ORO-AI TRANSLATION]",
-            error
-        );
-
-        if (status) {
-            status.textContent =
-                "Hiikuun hin milkoofne: " +
-                error.message;
-        }
-
-    }
-
-};
-
-
-// ======================================================
-// CAPTION GENERATOR
-// ======================================================
-
-window.oroAIGenerateCaption = async function () {
-
-    const textarea =
-        document.getElementById("post-text");
-
-    const status =
-        document.getElementById("oro-ai-post-status");
-
-    const topic = textarea?.value.trim();
-
-    if (!topic) {
-
-        if (status) {
-            status.textContent =
-                "Mata-duree ykn yaada barreessi.";
-        }
-
-        return;
-
-    }
-
-    try {
-
-        if (status) {
-            status.textContent =
-                "Caption qopheessaa jira...";
-        }
-
-        const caption =
-    await window.OroAI.generateContentSuggestions(
-        topic,
-        window.oroAISelectedMode || "auto"
-    );
-
-        textarea.value = caption;
-
-        textarea.dispatchEvent(
-            new Event("input", { bubbles: true })
-        );
-
-        if (status) {
-            status.textContent =
-                "Caption qophaa'eera.";
-        }
-
-    } catch (error) {
-
-        console.error(
-            "[ORO-AI CAPTION]",
-            error
-        );
-
-        if (status) {
-            status.textContent =
-                "Caption qopheessuun hin milkoofne: " +
-                error.message;
-        }
-
-    }
-
-};
-
-
-console.info(
-    "[ORO-AI] Chatbot and UI initialized."
-);
-
-
-// ======================================================
-// GLOBAL SANITIZER
-// ======================================================
-
-window.sanitizeInput = function (input) {
-
-    if (
-        !window.AppService ||
-        typeof window.AppService.sanitizeText !== "function"
+    // ========================================================
+    // INPUT VALIDATION
+    // ========================================================
+
+    function validateText(
+        value,
+        name = "Barruu",
+        maxLength = CONFIG.maxTextLength
     ) {
 
-        console.error(
-            "[ORO-AI] AppService sanitizer unavailable."
-        );
+        if (
+            typeof value !== "string" ||
+            !value.trim()
+        ) {
 
-        return String(input ?? "");
+            throw createError(
+                name + " galchi.",
+                "INVALID_INPUT"
+            );
+
+        }
+
+        const result = value.trim();
+
+        if (result.length > maxLength) {
+
+            throw createError(
+                name +
+                " baay'ee dheeraa dha. " +
+                maxLength +
+                " characters gadi ta'uu qaba.",
+                "INPUT_TOO_LONG"
+            );
+
+        }
+
+        return result;
 
     }
 
-    return window.AppService.sanitizeText(input);
 
-};
+    function sanitizeHistory(history) {
+
+        if (!Array.isArray(history)) {
+
+            throw createError(
+                "Chat history sirrii miti.",
+                "INVALID_HISTORY"
+            );
+
+        }
+
+        return history
+
+            .filter(item =>
+
+                item &&
+
+                ["user", "model"].includes(item.role) &&
+
+                typeof item.content === "string" &&
+
+                item.content.trim()
+
+            )
+
+            .slice(-CONFIG.maxHistory)
+
+            .map(item => ({
+
+                role: item.role,
+
+                content: item.content.slice(0, 4000)
+
+            }));
+
+    }
 
 
-// ======================================================
-// CENTRAL AUTH EVENT LISTENER
-// ======================================================
+    // ========================================================
+    // LOCAL USAGE TRACKING
+    // UX ONLY — NOT SECURITY
+    // ========================================================
 
-if (
-    !window.__oroAuthListenerRegistered &&
-    window.AppService &&
-    typeof window.AppService.onAuthStateChanged === "function"
-) {
+    function getDateKey() {
 
-    window.__oroAuthListenerRegistered = true;
+        const date = new Date();
 
-    window.__oroAuthUnsubscribe =
-        window.AppService.onAuthStateChanged(
+        return [
 
-            window.AppService.auth,
+            date.getFullYear(),
 
-            user => {
+            String(date.getMonth() + 1).padStart(2, "0"),
+
+            String(date.getDate()).padStart(2, "0")
+
+        ].join("-");
+
+    }
+
+
+    function getUsageKey(uid) {
+
+        return (
+            "oro_ai_usage_" +
+            uid +
+            "_" +
+            getDateKey()
+        );
+
+    }
+
+
+    function emptyUsage() {
+
+        return {
+
+            requests: 0,
+
+            tokens: 0,
+
+            cost: 0,
+
+            minuteCount: 0,
+
+            minuteStarted: 0
+
+        };
+
+    }
+
+
+    function readUsage(uid) {
+
+        try {
+
+            const raw = localStorage.getItem(
+                getUsageKey(uid)
+            );
+
+            const data = raw
+                ? JSON.parse(raw)
+                : {};
+
+            return {
+
+                requests:
+                    Number(data.requests) || 0,
+
+                tokens:
+                    Number(data.tokens) || 0,
+
+                cost:
+                    Number(data.cost) || 0,
+
+                minuteCount:
+                    Number(data.minuteCount) || 0,
+
+                minuteStarted:
+                    Number(data.minuteStarted) || 0
+
+            };
+
+        } catch {
+
+            return emptyUsage();
+
+        }
+
+    }
+
+
+    function writeUsage(uid, usage) {
+
+        try {
+
+            localStorage.setItem(
+
+                getUsageKey(uid),
+
+                JSON.stringify(usage)
+
+            );
+
+        } catch (error) {
+
+            console.warn(
+                "[ORO-AI] Usage storage unavailable.",
+                error
+            );
+
+        }
+
+    }
+
+
+    function checkLocalLimit(uid, tier) {
+
+        const limits =
+            LIMITS[tier] || LIMITS.free;
+
+        const usage = readUsage(uid);
+
+        const now = Date.now();
+
+
+        if (
+
+            !usage.minuteStarted ||
+
+            now - usage.minuteStarted >= 60000
+
+        ) {
+
+            usage.minuteStarted = now;
+
+            usage.minuteCount = 0;
+
+        }
+
+
+        if (
+            usage.minuteCount >= limits.perMinute
+        ) {
+
+            throw createError(
+                "Daangaan AI daqiiqaa kanaa guutameera.",
+                "RATE_LIMIT"
+            );
+
+        }
+
+
+        if (
+            usage.requests >= limits.perDay
+        ) {
+
+            throw createError(
+                "Daangaan AI guyyaa kanaa guutameera.",
+                "DAILY_LIMIT"
+            );
+
+        }
+
+
+        usage.minuteCount++;
+
+        usage.requests++;
+
+        writeUsage(uid, usage);
+
+        return usage;
+
+    }
+
+
+    function recordUsage(uid, serverUsage = {}) {
+
+        if (
+            !serverUsage ||
+            typeof serverUsage !== "object"
+        ) {
+
+            return;
+
+        }
+
+        const usage = readUsage(uid);
+
+
+        const totalTokens =
+
+            Number(serverUsage.total_tokens) ||
+
+            Number(serverUsage.totalTokens) ||
+
+            Number(serverUsage.totalTokenCount) ||
+
+            (
+
+                Number(serverUsage.promptTokenCount || 0) +
+
+                Number(serverUsage.candidatesTokenCount || 0)
+
+            ) ||
+
+            (
+
+                Number(serverUsage.input_tokens || 0) +
+
+                Number(serverUsage.output_tokens || 0)
+
+            );
+
+
+        usage.tokens += totalTokens;
+
+
+        const cost = Number(
+            serverUsage.costUsd
+        );
+
+        if (
+            Number.isFinite(cost) &&
+            cost >= 0
+        ) {
+
+            usage.cost += cost;
+
+        }
+
+
+        writeUsage(uid, usage);
+
+    }
+
+
+    // ========================================================
+    // NETWORK RECOVERY
+    // ========================================================
+
+    function wait(ms) {
+
+        return new Promise(resolve => {
+
+            setTimeout(resolve, ms);
+
+        });
+
+    }
+
+
+    async function waitForNetwork(
+        timeout = 15000
+    ) {
+
+        if (
+            typeof navigator !== "undefined" &&
+            navigator.onLine
+        ) {
+
+            return;
+
+        }
+
+
+        await new Promise((resolve, reject) => {
+
+            let timer = null;
+
+            let finished = false;
+
+
+            function cleanup() {
+
+                window.removeEventListener(
+                    "online",
+                    onOnline
+                );
+
+                if (timer) {
+
+                    clearTimeout(timer);
+
+                }
+
+            }
+
+
+            function onOnline() {
+
+                if (finished) return;
+
+                finished = true;
+
+                cleanup();
+
+                resolve();
+
+            }
+
+
+            window.addEventListener(
+                "online",
+                onOnline
+            );
+
+
+            // Re-check after adding listener to avoid race.
+
+            if (
+                typeof navigator !== "undefined" &&
+                navigator.onLine
+            ) {
+
+                onOnline();
+
+                return;
+
+            }
+
+
+            timer = setTimeout(() => {
+
+                if (finished) return;
+
+                finished = true;
+
+                cleanup();
+
+                reject(
+
+                    createError(
+                        "Internet connection hin jiru.",
+                        "OFFLINE"
+                    )
+
+                );
+
+            }, timeout);
+
+        });
+
+    }
+
+
+    function isRetryable(error) {
+
+        if (!error) return false;
+
+        return (
+
+            error.name === "TypeError" ||
+
+            [
+
+                "CONNECTION_ERROR",
+
+                "TIMEOUT",
+
+                "HTTP_502",
+
+                "HTTP_503",
+
+                "HTTP_504"
+
+            ].includes(error.code)
+
+        );
+
+    }
+
+
+    // ========================================================
+    // RESPONSE EXTRACTION
+    // ========================================================
+
+    function extractResponse(result) {
+
+        if (
+            !result ||
+            typeof result !== "object"
+        ) {
+
+            return null;
+
+        }
+
+
+        const candidates = [
+
+            result.reply,
+
+            result.result,
+
+            result.response,
+
+            result.text,
+
+            result.output
+
+        ];
+
+
+        for (const value of candidates) {
+
+            if (
+
+                typeof value === "string" &&
+
+                value.trim()
+
+            ) {
+
+                return value.trim();
+
+            }
+
+        }
+
+
+        const parts =
+            result.candidates?.[0]?.content?.parts || [];
+
+
+        const text = parts
+
+            .filter(part =>
+
+                typeof part.text === "string" &&
+
+                !part.thought
+
+            )
+
+            .map(part => part.text)
+
+            .join("\n")
+
+            .trim();
+
+
+        return text || null;
+
+    }
+
+    async function readStream(
+        response,
+        onChunk
+    ) {
+
+        if (
+            !response.body ||
+            typeof response.body.getReader !== "function"
+        ) {
+
+            throw createError(
+                "Streaming response hin deeggaramne.",
+                "STREAM_UNAVAILABLE"
+            );
+
+        }
+
+
+        const reader = response.body.getReader();
+
+        const decoder = new TextDecoder();
+
+        let buffer = "";
+
+        let fullText = "";
+
+        let streamFinished = false;
+
+        let streamMetadata = null;
+
+
+        function processLine(line) {
+
+            line = line.trim();
+
+            if (
+                !line ||
+                line.startsWith(":") ||
+                line.startsWith("event:") ||
+                line.startsWith("id:") ||
+                line.startsWith("retry:")
+            ) {
+
+                return;
+
+            }
+
+
+            if (line.startsWith("data:")) {
+
+                line = line.slice(5).trim();
+
+            }
+
+
+            if (line === "[DONE]") {
+
+                streamFinished = true;
+
+                return;
+
+            }
+
+
+            let payload;
+
+            try {
+
+                payload = JSON.parse(line);
+
+            } catch {
+
+                payload = {
+
+                    delta: line
+
+                };
+
+            }
+
+
+            if (
+                payload.error ||
+                payload.success === false
+            ) {
+
+                throw createError(
+
+                    payload.message ||
+
+                    payload.error ||
+
+                    "Streaming error.",
+
+                    "STREAM_ERROR"
+
+                );
+
+            }
+
+            if (
+                payload.meta ||
+                payload.metadata
+            ) {
+
+                streamMetadata =
+                    payload.meta ||
+                    payload.metadata;
+
+            }
+
+
+            if (payload.usage) {
+
+                streamMetadata = {
+
+                    ...(streamMetadata || {}),
+
+                    usage: payload.usage
+
+                };
+
+            }
+
+
+            const delta =
+
+                payload.delta ??
+
+                payload.token ??
+
+                payload.text ??
+
+                payload.content;
+
+
+            if (
+
+                typeof delta === "string" &&
+
+                delta
+
+            ) {
+
+                fullText += delta;
+
+
+                if (
+                    typeof onChunk === "function"
+                ) {
+
+                    onChunk(
+                        delta,
+                        fullText
+                    );
+
+                }
+
+            }
+
+        }
+
+
+        try {
+
+            while (!streamFinished) {
+
+                const { value, done } =
+                    await reader.read();
+
+
+                if (done) break;
+
+
+                buffer += decoder.decode(
+                    value,
+                    {
+                        stream: true
+                    }
+                );
+
+
+                const lines =
+                    buffer.split(/\r?\n/);
+
+                buffer = lines.pop() || "";
+
+
+                for (const line of lines) {
+
+                    processLine(line);
+
+                    if (streamFinished) break;
+
+                }
+
+            }
+
+
+            if (!streamFinished) {
+
+                buffer += decoder.decode();
+
+                if (buffer.trim()) {
+
+                    processLine(buffer);
+
+                }
+
+            }
+
+
+            if (!fullText.trim()) {
+
+                throw createError(
+                    "AI streaming deebii duwwaa deebise.",
+                    "EMPTY_STREAM"
+                );
+
+            }
+
+
+            return {
+
+                text: fullText.trim(),
+
+                metadata: streamMetadata
+
+            };
+
+
+        } catch (error) {
+
+            try {
+
+                await reader.cancel();
+
+            } catch {}
+
+
+            throw error;
+
+        }
+
+    }
+
+    async function readWorkerError(response) {
+
+        let message =
+            "ORO-AI request hin milkoofne.";
+
+        try {
+
+            const text = await response.text();
+
+            if (text) {
 
                 try {
 
-                    window.currentUser = user || null;
+                    const data = JSON.parse(text);
 
-                    console.info(
-                        "[ORO-AUTH] Authentication state:",
-                        user ? "Authenticated" : "Logged out"
-                    );
+                    message =
 
-                    window.dispatchEvent(
+                        data.message ||
 
-                        new CustomEvent(
-                            "oro-auth-changed",
-                            {
-                                detail: {
-                                    user: user || null
-                                }
-                            }
-                        )
+                        data.error ||
+
+                        message;
+
+                } catch {
+
+                    if (text.length < 500) {
+
+                        message = text;
+
+                    }
+
+                }
+
+            }
+
+        } catch {}
+
+
+        return createError(
+
+            message,
+
+            "HTTP_" + response.status
+
+        );
+
+    }
+
+
+    // ========================================================
+    // CLOUDFLARE WORKER REQUEST
+    // ========================================================
+
+    async function callWorker(
+        data,
+        options = {}
+    ) {
+
+        if (
+
+            !data ||
+
+            typeof data !== "object" ||
+
+            Array.isArray(data)
+
+        ) {
+
+            throw createError(
+                "Request data sirrii miti.",
+                "INVALID_DATA"
+            );
+
+        }
+
+
+        const auth =
+            await getAuthenticatedUser();
+
+
+        checkLocalLimit(
+            auth.uid,
+            auth.tier
+        );
+
+
+        const requestId =
+
+            window.crypto?.randomUUID?.() ||
+
+            Date.now() +
+            "-" +
+            Math.random().toString(36).slice(2);
+
+
+        const requestData = {
+
+            ...data,
+
+            requestId,
+
+            stream: options.stream === true
+
+        };
+
+
+        let lastError;
+
+
+        for (
+
+            let attempt = 0;
+
+            attempt <= CONFIG.maxRetries;
+
+            attempt++
+
+        ) {
+
+            const controller =
+                new AbortController();
+
+            activeController = controller;
+
+
+            const timeoutId = setTimeout(
+
+                () => controller.abort(),
+
+                CONFIG.timeout
+
+            );
+
+
+            try {
+
+                await waitForNetwork();
+
+
+                let response;
+
+
+                try {
+
+                    response = await fetch(
+
+                        CONFIG.workerURL,
+
+                        {
+
+                            method: "POST",
+
+                            mode: "cors",
+
+                            credentials: "omit",
+
+                            cache: "no-store",
+
+                            headers: {
+
+                                "Content-Type":
+                                    "application/json",
+
+                                "Accept": options.stream
+
+                                    ? "text/event-stream, application/x-ndjson, application/json"
+
+                                    : "application/json",
+
+                                "Authorization":
+                                    "Bearer " + auth.token,
+
+                                "X-Request-ID":
+                                    requestId
+
+                            },
+
+                            body: JSON.stringify(
+                                requestData
+                            ),
+
+                            signal: controller.signal
+
+                        }
 
                     );
 
                 } catch (error) {
 
-                    console.error(
-                        "[ORO-AUTH] Event dispatch failed:",
-                        error
+                    if (
+                        error.name === "AbortError"
+                    ) {
+
+                        throw createError(
+
+                            "ORO-AI yeroo eegame keessatti deebii hin kennine.",
+
+                            "TIMEOUT"
+
+                        );
+
+                    }
+
+
+                    throw createError(
+
+                        "ORO-AI network connection error.",
+
+                        "CONNECTION_ERROR"
+
                     );
 
                 }
 
-            },
 
-            error => {
+                if (!response.ok) {
+
+                    throw await readWorkerError(
+                        response
+                    );
+
+                }
+
+
+                const contentType =
+
+                    response.headers.get(
+                        "content-type"
+                    ) || "";
+
+
+                let result = null;
+
+                let answer = "";
+
+
+                // ------------------------------------
+                // STREAMING RESPONSE
+                // ------------------------------------
+
+                if (
+
+                    options.stream &&
+
+                    (
+
+                        contentType.includes(
+                            "text/event-stream"
+                        ) ||
+
+                        contentType.includes(
+                            "application/x-ndjson"
+                        )
+
+                    )
+
+                ) {
+
+                    const streamResult =
+                        await readStream(
+
+                            response,
+
+                            options.onChunk
+
+                        );
+
+
+                    answer = streamResult.text;
+
+
+                    result = {
+
+                        success: true,
+
+                        reply: answer,
+
+                        provider: "stream"
+
+                    };
+
+
+                    if (streamResult.metadata) {
+
+                        result = {
+
+                            ...result,
+
+                            ...streamResult.metadata
+
+                        };
+
+                    }
+
+                }
+
+
+                // ------------------------------------
+                // NORMAL JSON RESPONSE
+                // ------------------------------------
+
+                else {
+
+                    const responseText =
+                        await response.text();
+
+
+                    try {
+
+                        result = JSON.parse(
+                            responseText
+                        );
+
+                    } catch {
+
+                        throw createError(
+
+                            "Worker JSON sirrii hin deebifne.",
+
+                            "INVALID_JSON"
+
+                        );
+
+                    }
+
+
+                    if (
+                        result.success !== true
+                    ) {
+
+                        throw createError(
+
+                            result.message ||
+
+                            result.error ||
+
+                            "ORO-AI API error.",
+
+                            "API_ERROR"
+
+                        );
+
+                    }
+
+
+                    answer =
+                        extractResponse(result);
+
+
+                    if (!answer) {
+
+                        throw createError(
+
+                            "ORO-AI deebii barruu hin kennine.",
+
+                            "EMPTY_RESPONSE"
+
+                        );
+
+                    }
+
+
+                    if (
+                        typeof options.onChunk === "function"
+                    ) {
+
+                        options.onChunk(
+                            answer,
+                            answer
+                        );
+
+                    }
+
+                }
+
+
+                // ------------------------------------
+                // LAST RESULT METADATA
+                // ------------------------------------
+
+                window.__ORO_AI_LAST_RESULT__ = {
+
+                    requestId,
+
+                    provider:
+                        result.provider || null,
+
+                    modelUsed:
+                        result.modelUsed || null,
+
+                    modelsUsed:
+                        result.modelsUsed || [],
+
+                    aiMode:
+                        result.aiMode ||
+                        data.aiMode ||
+                        "auto",
+
+                    fallback:
+                        result.fallback === true,
+
+                    collaboration:
+                        result.collaboration || null,
+
+                    task:
+                        result.task ||
+                        data.task ||
+                        "chat",
+
+                    usage:
+                        result.usage || null
+
+                };
+
+
+                // ------------------------------------
+                // SERVER USAGE
+                // ------------------------------------
+
+                if (result.usage) {
+
+                    recordUsage(
+                        auth.uid,
+                        result.usage
+                    );
+
+                }
+
+
+                return answer;
+
+
+            } catch (error) {
+
+                lastError = error;
+
 
                 console.error(
-                    "[ORO-AUTH] Authentication listener failed:",
-                    error
+
+                    "[ORO-AI REQUEST]",
+
+                    error.code || error.name,
+
+                    error.message
+
                 );
+
+
+                // Do not retry a streaming response.
+                // Retrying may duplicate partial output
+                // and create additional provider charges.
+
+                if (
+
+                    attempt >= CONFIG.maxRetries ||
+
+                    !isRetryable(error) ||
+
+                    options.stream
+
+                ) {
+
+                    throw error;
+
+                }
+
+
+                await wait(
+
+                    Math.min(
+
+                        CONFIG.retryDelay *
+                        (2 ** attempt),
+
+                        8000
+
+                    ) +
+
+                    Math.floor(
+                        Math.random() * 500
+                    )
+
+                );
+
+
+            } finally {
+
+                clearTimeout(timeoutId);
+
+
+                if (
+                    activeController === controller
+                ) {
+
+                    activeController = null;
+
+                }
+
+            }
+
+        }
+
+
+        throw lastError || createError(
+            "ORO-AI request hin milkoofne."
+        );
+
+    }
+
+
+    // ========================================================
+    // FIRESTORE CHAT HISTORY
+    // ========================================================
+
+    function getSessionId(uid) {
+
+        if (
+
+            activeSessionId &&
+
+            currentUserId === uid
+
+        ) {
+
+            return activeSessionId;
+
+        }
+
+
+        const key =
+            "oro_ai_session_" + uid;
+
+
+        try {
+
+            let sessionId =
+                localStorage.getItem(key);
+
+
+            if (!sessionId) {
+
+                sessionId =
+
+                    "session_" +
+
+                    Date.now() +
+
+                    "_" +
+
+                    Math.random()
+                        .toString(36)
+                        .slice(2, 9);
+
+
+                localStorage.setItem(
+                    key,
+                    sessionId
+                );
+
+            }
+
+
+            activeSessionId = sessionId;
+
+        } catch {
+
+            activeSessionId =
+                "session_" + Date.now();
+
+        }
+
+
+        currentUserId = uid;
+
+        return activeSessionId;
+
+    }
+
+
+    function getHistoryReferences(uid) {
+
+        const firebase = getFirebase();
+
+        const m = firebase.methods;
+
+
+        if (
+
+            !firebase.db ||
+
+            !m.doc ||
+
+            !m.collection
+
+        ) {
+
+            return null;
+
+        }
+
+
+        const sessionId =
+            getSessionId(uid);
+
+
+        const sessionRef = m.doc(
+
+            firebase.db,
+
+            "users",
+
+            uid,
+
+            "aiChats",
+
+            sessionId
+
+        );
+
+
+        const messagesRef = m.collection(
+
+            sessionRef,
+
+            "messages"
+
+        );
+
+
+        return {
+
+            firebase,
+
+            sessionRef,
+
+            messagesRef
+
+        };
+
+    }
+
+
+    async function saveHistory(
+        uid,
+        role,
+        content
+    ) {
+
+        try {
+
+            const refs =
+                getHistoryReferences(uid);
+
+
+            if (!refs) return false;
+
+
+            const {
+                firebase,
+                messagesRef
+            } = refs;
+
+
+            const m = firebase.methods;
+
+
+            if (!m.addDoc) return false;
+
+
+            const record = {
+
+                role,
+
+                content:
+                    String(content).slice(0, 12000),
+
+                createdAtMs: Date.now()
+
+            };
+
+
+            if (m.serverTimestamp) {
+
+                record.createdAt =
+                    m.serverTimestamp();
+
+            }
+
+
+            await m.addDoc(
+
+                messagesRef,
+
+                record
+
+            );
+
+
+            return true;
+
+
+        } catch (error) {
+
+            console.error(
+                "[ORO-AI HISTORY SAVE]",
+                error
+            );
+
+            return false;
+
+        }
+
+    }
+
+
+    async function loadHistory(
+        maxItems = CONFIG.maxFirestoreHistory
+    ) {
+
+        try {
+
+            const auth =
+                await getAuthenticatedUser();
+
+
+            const refs =
+                getHistoryReferences(auth.uid);
+
+
+            if (!refs) return [];
+
+
+            const {
+                firebase,
+                messagesRef
+            } = refs;
+
+
+            const m = firebase.methods;
+
+
+            if (!m.getDocs) return [];
+
+
+            let queryRef = messagesRef;
+
+
+            if (
+
+                m.query &&
+
+                m.orderBy &&
+
+                m.limit
+
+            ) {
+
+                queryRef = m.query(
+
+                    messagesRef,
+
+                    m.orderBy(
+                        "createdAtMs",
+                        "desc"
+                    ),
+
+                    m.limit(
+                        Math.min(
+                            maxItems,
+                            100
+                        )
+                    )
+
+                );
+
+            }
+
+
+            const snapshot =
+                await m.getDocs(queryRef);
+
+
+            return snapshot.docs
+
+                .map(doc => doc.data())
+
+                .filter(item =>
+
+                    item &&
+
+                    ["user", "model"].includes(
+                        item.role
+                    ) &&
+
+                    typeof item.content === "string"
+
+                )
+
+                .sort((a, b) =>
+
+                    (a.createdAtMs || 0) -
+                    (b.createdAtMs || 0)
+
+                )
+
+                .slice(-maxItems);
+
+
+        } catch (error) {
+
+            console.error(
+                "[ORO-AI HISTORY LOAD]",
+                error
+            );
+
+            return [];
+
+        }
+
+    }
+
+
+    // ========================================================
+    // IMAGE VALIDATION
+    // WORKER MAX IMAGE SIZE = 10MB
+    // ========================================================
+
+    async function imageToDataURL(
+        file,
+        tier = "free"
+    ) {
+
+        if (!(file instanceof Blob)) {
+
+            throw createError(
+                "Image file sirrii miti.",
+                "INVALID_IMAGE"
+            );
+
+        }
+
+
+        const limits =
+            LIMITS[tier] || LIMITS.free;
+
+
+        if (
+            !CONFIG.allowedImageTypes.includes(
+                file.type
+            )
+        ) {
+
+            throw createError(
+
+                "JPEG, PNG, WEBP ykn GIF qofa fayyadami.",
+
+                "IMAGE_TYPE"
+
+            );
+
+        }
+
+
+        const maxBytes =
+
+            Math.min(
+
+                limits.maxImageMB,
+
+                CONFIG.maxImageMB
+
+            ) *
+
+            1024 *
+
+            1024;
+
+
+        if (file.size > maxBytes) {
+
+            throw createError(
+
+                "Image baay'ee guddaa dha. " +
+
+                Math.min(
+                    limits.maxImageMB,
+                    CONFIG.maxImageMB
+                ) +
+
+                "MB gadi ta'uu qaba.",
+
+                "IMAGE_TOO_LARGE"
+
+            );
+
+        }
+
+
+        return new Promise((resolve, reject) => {
+
+            const reader = new FileReader();
+
+
+            reader.onload = () => {
+
+                if (
+                    typeof reader.result !== "string"
+                ) {
+
+                    reject(
+
+                        createError(
+                            "Image dubbisuun hin danda'amne.",
+                            "IMAGE_READ_ERROR"
+                        )
+
+                    );
+
+                    return;
+
+                }
+
+
+                if (
+                    !reader.result.startsWith(
+                        "data:image/"
+                    )
+                ) {
+
+                    reject(
+
+                        createError(
+                            "Image data sirrii miti.",
+                            "INVALID_IMAGE_DATA"
+                        )
+
+                    );
+
+                    return;
+
+                }
+
+
+                resolve(reader.result);
+
+            };
+
+
+            reader.onerror = () => {
+
+                reject(
+
+                    createError(
+                        "Image dubbisuun hin danda'amne.",
+                        "IMAGE_READ_ERROR"
+                    )
+
+                );
+
+            };
+
+
+            reader.onabort = () => {
+
+                reject(
+
+                    createError(
+                        "Image dubbisuun addaan cite.",
+                        "IMAGE_READ_ABORTED"
+                    )
+
+                );
+
+            };
+
+
+            reader.readAsDataURL(file);
+
+        });
+
+    }
+
+
+    // ========================================================
+    // CORE CHAT FUNCTION
+    // ========================================================
+
+    async function chatWithBot(
+
+        message,
+
+        history = [],
+
+        aiMode = "auto",
+
+        options = {}
+
+    ) {
+
+        message = validateText(
+
+            message,
+
+            "Ergaa AI'if kennamu",
+
+            CONFIG.maxTextLength
+
+        );
+
+
+        aiMode = validateMode(aiMode);
+
+
+        const safeHistory =
+            sanitizeHistory(history);
+
+
+        const auth =
+            await getAuthenticatedUser();
+
+
+        await saveHistory(
+
+            auth.uid,
+
+            "user",
+
+            message
+
+        );
+
+
+        try {
+
+            const answer = await callWorker(
+
+                {
+
+                    task: "chat",
+
+                    aiMode,
+
+                    message,
+
+                    history: safeHistory
+
+                },
+
+                {
+
+                    stream:
+                        options.stream === true,
+
+                    onChunk:
+                        options.onChunk
+
+                }
+
+            );
+
+
+            await saveHistory(
+
+                auth.uid,
+
+                "model",
+
+                answer
+
+            );
+
+
+            return answer;
+
+
+        } catch (error) {
+
+            throw error;
+
+        }
+
+    }
+
+
+    // ========================================================
+    // PUBLIC ORO-AI SERVICE
+    // ========================================================
+
+    const OroAI = Object.freeze({
+    
+    // --------------------------------------------
+    // CHAT
+    // --------------------------------------------
+    
+    chatWithBot,
+    
+    // --------------------------------------------
+    // ORO-AI FAST
+    // --------------------------------------------
+    
+    fast(message, history = []) {
+        return chatWithBot(
+            message,
+            history,
+            "fast"
+        );
+    },
+    
+    // --------------------------------------------
+    // ORO-AI SMART
+    // --------------------------------------------
+    
+    smart(message, history = []) {
+        return chatWithBot(
+            message,
+            history,
+            "smart"
+        );
+    },
+    
+    // --------------------------------------------
+    // ORO-AI ADVANCED
+    // --------------------------------------------
+    
+    advanced(message, history = []) {
+        return chatWithBot(
+            message,
+            history,
+            "advanced"
+        );
+    },
+    
+    // --------------------------------------------
+    // IMAGE UNDERSTANDING
+    // --------------------------------------------
+    
+    async analyzeImage(
+        file,
+        prompt = "Image kana ibsi.",
+        aiMode = "auto"
+    ) {
+        const auth = await getAuthenticatedUser();
+        
+        const image = await imageToDataURL(
+            file,
+            auth.tier
+        );
+        
+        return callWorker({
+            task: "vision",
+            aiMode: validateMode(aiMode),
+            prompt: validateText(
+                prompt,
+                "Gaaffii image",
+                3000
+            ),
+            image
+        });
+    },
+    
+    // --------------------------------------------
+    // SPELL CORRECTION
+    // --------------------------------------------
+    
+    checkAndCorrectText(
+        text,
+        aiMode = "auto"
+    ) {
+        text = validateText(
+            text,
+            "Barruu sirreeffamu",
+            10000
+        );
+        
+        return callWorker({
+            task: "correct",
+            aiMode: validateMode(aiMode),
+            text
+        });
+    },
+    
+    // --------------------------------------------
+    // TRANSLATION
+    // --------------------------------------------
+    
+    translate(
+        text,
+        language = "en",
+        aiMode = "auto"
+    ) {
+        text = validateText(
+            text,
+            "Barruu hiikamu",
+            10000
+        );
+        
+        const languages = [
+            "om",
+            "en",
+            "am"
+        ];
+        
+        if (!languages.includes(language)) {
+            throw createError(
+                "Afaan filatame hin deeggaramu.",
+                "INVALID_LANGUAGE"
+            );
+        }
+        
+        return callWorker({
+            task: "translate",
+            aiMode: validateMode(aiMode),
+            text,
+            language
+        });
+    },
+    
+    // --------------------------------------------
+    // CAPTION GENERATOR
+    // --------------------------------------------
+    
+    generateContentSuggestions(
+        topic,
+        aiMode = "auto"
+    ) {
+        topic = validateText(
+            topic,
+            "Mata-duree",
+            5000
+        );
+        
+        return callWorker({
+            task: "caption",
+            aiMode: validateMode(aiMode),
+            topic
+        });
+    },
+    
+    // --------------------------------------------
+    // SMART REPLY
+    // --------------------------------------------
+    
+    smartReply(
+        message,
+        aiMode = "auto"
+    ) {
+        message = validateText(
+            message,
+            "Ergaa deebii itti qophaa'u",
+            5000
+        );
+        
+        return callWorker({
+            task: "smart_reply",
+            aiMode: validateMode(aiMode),
+            message
+        });
+    },
+    
+    // --------------------------------------------
+    // HISTORY
+    // --------------------------------------------
+    
+    loadHistory,
+    
+    // --------------------------------------------
+    // USAGE SUMMARY
+    // --------------------------------------------
+    
+    getUsageSummary() {
+        const user =
+            getFirebase().auth?.currentUser ||
+            window.currentUser;
+        
+        if (!user) {
+            return emptyUsage();
+        }
+        
+        const usage = readUsage(user.uid);
+        
+        return {
+            requests: usage.requests,
+            tokens: usage.tokens,
+            cost: usage.cost
+        };
+    },
+    
+    // --------------------------------------------
+    // MODE VALIDATION
+    // --------------------------------------------
+    
+    validateMode,
+    
+    // --------------------------------------------
+    // CANCEL ACTIVE REQUEST
+    // --------------------------------------------
+    
+    cancelRequest() {
+        if (activeController) {
+            activeController.abort();
+            activeController = null;
+        }
+    }
+    
+});
+
+window.OroAI = OroAI;
+
+    // ========================================================
+    // AI MODE SELECTOR
+    // ========================================================
+
+    function initializeModeSelector() {
+
+        const form = document.getElementById(
+            "oro-ai-chat-form"
+        );
+
+
+        const panel = document.getElementById(
+            "oro-ai-panel"
+        );
+
+
+        if (!form || !panel) return;
+
+
+        if (
+            document.getElementById(
+                "oro-ai-mode-selector"
+            )
+        ) {
+
+            return;
+
+        }
+
+
+        const wrapper =
+            document.createElement("div");
+
+
+        wrapper.id =
+            "oro-ai-mode-wrapper";
+
+
+        wrapper.style.cssText = `
+
+            display:flex;
+
+            align-items:center;
+
+            gap:8px;
+
+            padding:8px 12px;
+
+            flex-wrap:wrap;
+
+        `;
+
+
+        const label =
+            document.createElement("label");
+
+
+        label.htmlFor =
+            "oro-ai-mode-selector";
+
+
+        label.textContent =
+            "ORO-AI:";
+
+
+        const select =
+            document.createElement("select");
+
+
+        select.id =
+            "oro-ai-mode-selector";
+
+
+        select.style.cssText = `
+
+            padding:8px 12px;
+
+            border-radius:8px;
+
+            max-width:100%;
+
+        `;
+
+
+        const modes = [
+    ["auto", "ORO-AI Auto"],
+    ["fast", "ORO-AI Fast"],
+    ["smart", "ORO-AI Smart"],
+    ["advanced", "ORO-AI Advanced"]
+];
+
+
+        modes.forEach(([value, title]) => {
+
+            const option =
+                document.createElement("option");
+
+
+            option.value = value;
+
+            option.textContent = title;
+
+
+            select.appendChild(option);
+
+        });
+
+
+        select.value = selectedMode;
+
+
+        select.addEventListener(
+            "change",
+            () => {
+
+                selectedMode =
+                    validateMode(select.value);
+
+                window.oroAISelectedMode =
+                    selectedMode;
+
+            }
+        );
+
+
+        wrapper.append(
+
+            label,
+
+            select
+
+        );
+
+
+        panel.insertBefore(
+
+            wrapper,
+
+            form
+
+        );
+
+    }
+
+
+    // ========================================================
+    // OPEN AI PANEL
+    // ========================================================
+
+    window.openOroAI = function () {
+
+        const panel = document.getElementById(
+            "oro-ai-panel"
+        );
+
+
+        if (!panel) {
+
+            console.error(
+                "[ORO-AI] Panel hin argamne."
+            );
+
+            return;
+
+        }
+
+
+        panel.hidden = false;
+
+        panel.style.display = "flex";
+
+
+        document.getElementById(
+            "oro-ai-chat-input"
+        )?.focus();
+
+    };
+
+
+    // ========================================================
+    // CLOSE AI PANEL
+    // ========================================================
+
+    window.closeOroAI = function () {
+
+        const panel = document.getElementById(
+            "oro-ai-panel"
+        );
+
+
+        if (!panel) return;
+
+
+        panel.hidden = true;
+
+        panel.style.display = "none";
+
+    };
+
+
+    // ========================================================
+    // DISPLAY MESSAGE
+    // ========================================================
+
+    function addMessage(message, type) {
+
+        const container =
+            document.getElementById(
+                "oro-ai-messages"
+            );
+
+
+        if (!container) {
+
+            console.error(
+                "[ORO-AI] Message container hin argamne."
+            );
+
+            return null;
+
+        }
+
+
+        const bubble =
+            document.createElement("div");
+
+
+        bubble.className =
+            "oro-ai-bubble " + type;
+
+
+        // Never inject AI output as HTML.
+
+        bubble.textContent =
+            String(message);
+
+
+        container.appendChild(bubble);
+
+
+        container.scrollTop =
+            container.scrollHeight;
+
+
+        return bubble;
+
+    }
+
+
+    // ========================================================
+    // LOCAL CHAT HISTORY
+    // ========================================================
+
+    function saveLocalHistory(
+        message,
+        answer
+    ) {
+
+        oroAIHistory.push(
+
+            {
+
+                role: "user",
+
+                content: message
+
+            },
+
+            {
+
+                role: "model",
+
+                content: answer
 
             }
 
         );
 
-}
+
+        oroAIHistory =
+            oroAIHistory.slice(-CONFIG.maxHistory);
+
+    }
 
 
-console.info(
-    "[ORO-CONNECT] Central services ready."
+    // ========================================================
+    // LOAD HISTORY — DUPLICATE PROTECTION
+    // ========================================================
+
+    async function initializeHistory() {
+
+        const generation = historyGeneration;
+
+
+        try {
+
+            const auth =
+                await getAuthenticatedUser();
+
+
+            if (
+                generation !== historyGeneration
+            ) {
+
+                return;
+
+            }
+
+
+            if (
+                historyLoadPromise &&
+                historyLoadUid === auth.uid
+            ) {
+
+                return historyLoadPromise;
+
+            }
+
+
+            historyLoadUid = auth.uid;
+
+
+            historyLoadPromise = (async () => {
+
+                const history =
+                    await OroAI.loadHistory(
+                        CONFIG.maxFirestoreHistory
+                    );
+
+
+                if (
+                    generation !== historyGeneration
+                ) {
+
+                    return;
+
+                }
+
+
+                const currentAuth =
+                    await getAuthenticatedUser();
+
+
+                if (
+                    currentAuth.uid !== auth.uid
+                ) {
+
+                    return;
+
+                }
+
+
+                if (!Array.isArray(history)) {
+
+                    return;
+
+                }
+
+
+                const container =
+                    document.getElementById(
+                        "oro-ai-messages"
+                    );
+
+
+                if (!container) return;
+
+
+                if (
+                    container.children.length === 0
+                ) {
+
+                    history.forEach(item => {
+
+                        addMessage(
+
+                            item.content,
+
+                            item.role === "user"
+                                ? "user"
+                                : "ai"
+
+                        );
+
+                    });
+
+                }
+
+
+                oroAIHistory = history
+
+                    .slice(-CONFIG.maxHistory)
+
+                    .map(item => ({
+
+                        role: item.role,
+
+                        content: item.content
+
+                    }));
+
+            })();
+
+
+            return await historyLoadPromise;
+
+
+        } catch (error) {
+
+            console.warn(
+                "[ORO-AI HISTORY]",
+                error
+            );
+
+        } finally {
+
+            if (
+                historyLoadUid &&
+                historyLoadUid === currentUserId
+            ) {
+
+                historyLoadPromise = null;
+
+            }
+
+        }
+
+    }
+
+
+    // ========================================================
+    // CHAT FORM
+    // ========================================================
+
+    function initializeChat() {
+
+        const form =
+            document.getElementById(
+                "oro-ai-chat-form"
+            );
+
+
+        if (!form) return;
+
+
+        if (
+            form.dataset.oroAIInitialized === "true"
+        ) {
+
+            return;
+
+        }
+
+
+        initializeModeSelector();
+
+
+        form.dataset.oroAIInitialized =
+            "true";
+
+
+        form.addEventListener(
+            "submit",
+            async function (event) {
+
+                event.preventDefault();
+
+
+                const input =
+                    document.getElementById(
+                        "oro-ai-chat-input"
+                    );
+
+
+                if (!input) return;
+
+
+                const message =
+                    input.value.trim();
+
+
+                if (!message) return;
+
+
+                if (
+                    form.dataset.oroAISending === "true"
+                ) {
+
+                    return;
+
+                }
+
+
+                form.dataset.oroAISending =
+                    "true";
+
+
+                input.value = "";
+
+
+                addMessage(
+                    message,
+                    "user"
+                );
+
+
+                const aiBubble = addMessage(
+
+                    "ORO-AI deebisaa jira...",
+
+                    "ai"
+
+                );
+
+
+                try {
+
+                    const answer =
+                        await OroAI.chatWithBot(
+
+                            message,
+
+                            oroAIHistory,
+
+                            selectedMode,
+
+                            {
+
+                                stream: true,
+
+                                onChunk: (
+                                    chunk,
+                                    fullText
+                                ) => {
+
+                                    if (aiBubble) {
+
+                                        aiBubble.textContent =
+                                            fullText;
+
+                                    }
+
+
+                                    const container =
+                                        document.getElementById(
+                                            "oro-ai-messages"
+                                        );
+
+
+                                    if (container) {
+
+                                        container.scrollTop =
+                                            container.scrollHeight;
+
+                                    }
+
+                                }
+
+                            }
+
+                        );
+
+
+                    if (aiBubble) {
+
+                        aiBubble.textContent =
+                            answer;
+
+                    }
+
+
+                    saveLocalHistory(
+
+                        message,
+
+                        answer
+
+                    );
+
+
+                    console.info(
+
+                        "[ORO-AI PROVIDER]",
+
+                        window.__ORO_AI_LAST_RESULT__
+
+                    );
+
+
+                } catch (error) {
+
+                    console.error(
+                        "[ORO-AI CHAT]",
+                        error
+                    );
+
+
+                    if (aiBubble) {
+
+                        aiBubble.textContent =
+
+                            "ORO-AI: " +
+
+                            (
+                                error.message ||
+                                "Dogoggorri uumame."
+                            );
+
+                    }
+
+                } finally {
+
+                    form.dataset.oroAISending =
+                        "false";
+
+                    input.focus();
+
+                }
+
+            }
+
+        );
+
+
+        initializeHistory();
+
+    }
+
+
+    // ========================================================
+    // SMART REPLY
+    // ========================================================
+
+    function initializeSmartReply() {
+
+        const composer =
+            document.querySelector(
+                ".chat-message-composer"
+            );
+
+
+        if (!composer) return;
+
+
+        if (
+            document.getElementById(
+                "oro-smart-reply-btn"
+            )
+        ) {
+
+            return;
+
+        }
+
+
+        const button =
+            document.createElement("button");
+
+
+        button.id =
+            "oro-smart-reply-btn";
+
+
+        button.type = "button";
+
+        button.textContent = "✨ AI Reply";
+
+        button.title =
+            "ORO-AI'n deebii ergaa qopheessi";
+
+
+        const panel =
+            document.createElement("div");
+
+
+        panel.id =
+            "oro-smart-reply-panel";
+
+
+        panel.hidden = true;
+
+
+        panel.style.cssText = `
+
+            display:none;
+
+            padding:12px;
+
+            margin:8px 0;
+
+            border-radius:12px;
+
+            background:var(--card-bg,#242526);
+
+            border:1px solid rgba(128,128,128,.25);
+
+        `;
+
+
+        const title =
+            document.createElement("strong");
+
+
+        title.textContent =
+            "✨ ORO-AI Smart Reply";
+
+
+        const output =
+            document.createElement("textarea");
+
+
+        output.id =
+            "oro-smart-reply-output";
+
+
+        output.rows = 5;
+
+
+        output.placeholder =
+            "ORO-AI deebii qopheessaa jira...";
+
+
+        output.style.cssText = `
+
+            width:100%;
+
+            box-sizing:border-box;
+
+            margin-top:10px;
+
+            padding:10px;
+
+            border-radius:8px;
+
+            resize:vertical;
+
+        `;
+
+
+        const useButton =
+            document.createElement("button");
+
+
+        useButton.type = "button";
+
+        useButton.textContent =
+            "Deebii kana fayyadami";
+
+
+        const closeButton =
+            document.createElement("button");
+
+
+        closeButton.type = "button";
+
+        closeButton.textContent = "Cufi";
+
+
+        panel.append(
+
+            title,
+
+            output,
+
+            useButton,
+
+            closeButton
+
+        );
+
+
+        composer.parentNode.insertBefore(
+
+            panel,
+
+            composer
+
+        );
+
+
+        composer.insertBefore(
+
+            button,
+
+            composer.firstChild
+
+        );
+
+
+        function getLatestIncomingMessage() {
+
+            const container =
+                document.getElementById(
+                    "chat-messages-stream"
+                );
+
+
+            if (!container) return "";
+
+
+            const messages =
+                container.querySelectorAll(
+                    ".message-wrapper"
+                );
+
+
+            for (
+
+                let i = messages.length - 1;
+
+                i >= 0;
+
+                i--
+
+            ) {
+
+                const wrapper =
+                    messages[i];
+
+
+                if (
+                    wrapper.dataset.isMine !== "false"
+                ) {
+
+                    continue;
+
+                }
+
+
+                if (
+
+                    wrapper.dataset.messageType &&
+
+                    wrapper.dataset.messageType !== "text"
+
+                ) {
+
+                    continue;
+
+                }
+
+
+                const bubble =
+                    wrapper.querySelector(
+                        ".message-bubble"
+                    );
+
+
+                const paragraph =
+                    bubble?.querySelector("p");
+
+
+                const message =
+                    paragraph?.textContent?.trim();
+
+
+                if (message) {
+
+                    return message.slice(0, 5000);
+
+                }
+
+            }
+
+
+            return "";
+
+        }
+
+
+        button.addEventListener(
+            "click",
+            async function () {
+
+                const incomingMessage =
+                    getLatestIncomingMessage();
+
+
+                panel.hidden = false;
+
+                panel.style.display = "block";
+
+
+                if (!incomingMessage) {
+
+                    output.value =
+                        "Ergaa nama biraa hin argamne.";
+
+                    return;
+
+                }
+
+
+                button.disabled = true;
+
+                button.textContent =
+                    "⏳ ORO-AI...";
+
+
+                output.value =
+                    "ORO-AI deebii qopheessaa jira...";
+
+
+                try {
+
+                    const answer =
+                        await OroAI.smartReply(
+
+                            incomingMessage,
+
+                            selectedMode
+
+                        );
+
+
+                    output.value = answer;
+
+
+                } catch (error) {
+
+                    console.error(
+                        "[ORO-AI SMART REPLY]",
+                        error
+                    );
+
+
+                    output.value =
+
+                        "Deebii qopheessuun hin milkoofne: " +
+
+                        error.message;
+
+                } finally {
+
+                    button.disabled = false;
+
+                    button.textContent =
+                        "✨ AI Reply";
+
+                }
+
+            }
+
+        );
+
+
+        useButton.addEventListener(
+            "click",
+            () => {
+
+                const input =
+                    document.getElementById(
+                        "chat-msg-input"
+                    );
+
+
+                const reply =
+                    output.value.trim();
+
+
+                if (!input || !reply) return;
+
+
+                input.value = reply;
+
+
+                input.dispatchEvent(
+
+                    new Event(
+                        "input",
+                        {
+                            bubbles: true
+                        }
+                    )
+
+                );
+
+
+                panel.hidden = true;
+
+                panel.style.display = "none";
+
+                input.focus();
+
+            }
+
+        );
+
+
+        closeButton.addEventListener(
+            "click",
+            () => {
+
+                panel.hidden = true;
+
+                panel.style.display = "none";
+
+            }
+        );
+
+    }
+
+
+    // ========================================================
+    // POST SPELL CORRECTION
+    // ========================================================
+
+    window.oroAICorrectPost =
+        async function () {
+
+            const textarea =
+                document.getElementById(
+                    "post-text"
+                );
+
+
+            const status =
+                document.getElementById(
+                    "oro-ai-post-status"
+                );
+
+
+            const text =
+                textarea?.value.trim();
+
+
+            if (!text) {
+
+                if (status) {
+
+                    status.textContent =
+                        "Barruu kee jalqaba barreessi.";
+
+                }
+
+                return;
+
+            }
+
+
+            try {
+
+                if (status) {
+
+                    status.textContent =
+                        "ORO-AI qubee sirreessaa jira...";
+
+                }
+
+
+                const corrected =
+                    await OroAI.checkAndCorrectText(
+
+                        text,
+
+                        selectedMode
+
+                    );
+
+
+                textarea.value = corrected;
+
+
+                textarea.dispatchEvent(
+
+                    new Event(
+                        "input",
+                        {
+                            bubbles: true
+                        }
+                    )
+
+                );
+
+
+                if (status) {
+
+                    status.textContent =
+                        "Qubee sirreeffameera.";
+
+                }
+
+
+            } catch (error) {
+
+                console.error(
+                    "[ORO-AI CORRECTION]",
+                    error
+                );
+
+
+                if (status) {
+
+                    status.textContent =
+
+                        "Sirreessuun hin milkoofne: " +
+
+                        error.message;
+
+                }
+
+            }
+
+        };
+
+
+    // ========================================================
+    // POST TRANSLATION
+    // ========================================================
+
+    window.oroAITranslatePost =
+        async function () {
+
+            const textarea =
+                document.getElementById(
+                    "post-text"
+                );
+
+
+            const language =
+                document.getElementById(
+                    "oro-ai-translate-to"
+                )?.value || "en";
+
+
+            const status =
+                document.getElementById(
+                    "oro-ai-post-status"
+                );
+
+
+            const text =
+                textarea?.value.trim();
+
+
+            if (!text) {
+
+                if (status) {
+
+                    status.textContent =
+                        "Barruu hiikamu barreessi.";
+
+                }
+
+                return;
+
+            }
+
+
+            try {
+
+                if (status) {
+
+                    status.textContent =
+                        "ORO-AI hiikaa jira...";
+
+                }
+
+
+                const translated =
+                    await OroAI.translate(
+
+                        text,
+
+                        language,
+
+                        selectedMode
+
+                    );
+
+
+                textarea.value =
+                    translated;
+
+
+                textarea.dispatchEvent(
+
+                    new Event(
+                        "input",
+                        {
+                            bubbles: true
+                        }
+                    )
+
+                );
+
+
+                if (status) {
+
+                    status.textContent =
+                        "Hiikkaan xumurameera.";
+
+                }
+
+
+            } catch (error) {
+
+                console.error(
+                    "[ORO-AI TRANSLATION]",
+                    error
+                );
+
+
+                if (status) {
+
+                    status.textContent =
+
+                        "Hiikuun hin milkoofne: " +
+
+                        error.message;
+
+                }
+
+            }
+
+        };
+
+
+    // ========================================================
+    // CAPTION GENERATOR
+    // ========================================================
+
+    window.oroAIGenerateCaption =
+        async function () {
+
+            const textarea =
+                document.getElementById(
+                    "post-text"
+                );
+
+
+            const status =
+                document.getElementById(
+                    "oro-ai-post-status"
+                );
+
+
+            const topic =
+                textarea?.value.trim();
+
+
+            if (!topic) {
+
+                if (status) {
+
+                    status.textContent =
+                        "Mata-duree ykn yaada barreessi.";
+
+                }
+
+                return;
+
+            }
+
+
+            try {
+
+                if (status) {
+
+                    status.textContent =
+                        "ORO-AI Caption qopheessaa jira...";
+
+                }
+
+
+                const caption =
+                    await OroAI.generateContentSuggestions(
+
+                        topic,
+
+                        selectedMode
+
+                    );
+
+
+                textarea.value = caption;
+
+
+                textarea.dispatchEvent(
+
+                    new Event(
+                        "input",
+                        {
+                            bubbles: true
+                        }
+                    )
+
+                );
+
+
+                if (status) {
+
+                    status.textContent =
+                        "Caption qophaa'eera.";
+
+                }
+
+            } catch (error) {
+
+                console.error(
+                    "[ORO-AI CAPTION]",
+                    error
+                );
+
+
+                if (status) {
+
+                    status.textContent =
+
+                        "Caption qopheessuun hin milkoofne: " +
+
+                        error.message;
+
+                }
+
+            }
+
+        };
+
+
+    // ========================================================
+    // GLOBAL SANITIZER COMPATIBILITY
+    // ========================================================
+
+    if (
+        typeof window.sanitizeInput !== "function"
+    ) {
+
+        window.sanitizeInput = function (input) {
+
+            const sanitizer =
+                window.AppService?.sanitizeText;
+
+
+            if (
+                typeof sanitizer === "function"
+            ) {
+
+                return sanitizer(input);
+
+            }
+
+
+            // Plain text fallback only.
+            // Never use this result as trusted HTML.
+
+            return String(input ?? "");
+
+        };
+
+    }
+
+
+    // ========================================================
+    // AUTHENTICATION STATE RESET
+    // ========================================================
+
+    window.addEventListener(
+
+        "oro-auth-changed",
+
+        event => {
+
+            const user =
+                event.detail?.user || null;
+
+
+            const newUid =
+                user?.uid || null;
+
+
+            if (newUid !== currentUserId) {
+
+                historyGeneration++;
+
+
+                activeSessionId = null;
+
+                currentUserId = newUid;
+
+                oroAIHistory = [];
+
+                historyLoadPromise = null;
+
+                historyLoadUid = null;
+
+
+                const container =
+                    document.getElementById(
+                        "oro-ai-messages"
+                    );
+
+
+                if (container) {
+
+                    container.replaceChildren();
+
+                }
+
+
+                if (user) {
+
+                    initializeHistory();
+
+                }
+
+            }
+
+        }
+
+    );
+
+
+    // ========================================================
+    // DYNAMIC UI INITIALIZATION
+    // ========================================================
+
+    function initializeInterfaces() {
+
+        initializeChat();
+
+        initializeSmartReply();
+
+    }
+
+
+    if (
+        document.readyState === "loading"
+    ) {
+
+        document.addEventListener(
+
+            "DOMContentLoaded",
+
+            initializeInterfaces,
+
+            {
+                once: true
+            }
+
+        );
+
+    } else {
+
+        initializeInterfaces();
+
+    }
+
+
+    // ========================================================
+    // DYNAMIC CHAT INITIALIZATION
+    // ========================================================
+
+    if (!window.__ORO_AI_UI_OBSERVER__) {
+
+        const observer =
+            new MutationObserver(() => {
+
+                initializeInterfaces();
+
+            });
+
+
+        if (document.body) {
+
+            observer.observe(
+
+                document.body,
+
+                {
+
+                    childList: true,
+
+                    subtree: true
+
+                }
+
+            );
+
+        }
+
+
+        window.__ORO_AI_UI_OBSERVER__ =
+            observer;
+
+    }
+
+
+    // ========================================================
+    // GLOBAL MODE ACCESS
+    // ========================================================
+
+    try {
+
+        Object.defineProperty(
+
+            window,
+
+            "oroAISelectedMode",
+
+            {
+
+                configurable: true,
+
+                get() {
+
+                    return selectedMode;
+
+                },
+
+                set(value) {
+
+                    selectedMode =
+                        validateMode(value);
+
+
+                    const selector =
+                        document.getElementById(
+                            "oro-ai-mode-selector"
+                        );
+
+
+                    if (selector) {
+
+                        selector.value =
+                            selectedMode;
+
+                    }
+
+                }
+
+            }
+
+        );
+
+    } catch (error) {
+
+        console.warn(
+            "[ORO-AI] Mode property unavailable.",
+            error
+        );
+
+    }
+
+
+    // ========================================================
+    // READY
+    // ========================================================
+
+    console.info(
+        "[ORO-AI] Production frontend initialized."
+    );
+
+
+  console.info(
+    "[ORO-AI] ORO-AI system ready (Auto, Fast, Smart, Advanced)."
 );
 
+
+})(window, document);
 window.startPostsListener = function(onPostsChanged) {
     if (typeof onPostsChanged !== "function") {
         throw new TypeError("Posts callback function barbaachisa.");
