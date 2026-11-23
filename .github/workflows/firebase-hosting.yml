@@ -4,10 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'Documents/ORO-CONNECT/**'
-      - '.github/workflows/firebase-hosting.yml'
-
   workflow_dispatch:
 
 jobs:
@@ -24,4 +20,4 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           projectId: oro-connect-1f468
           channelId: live
-          entryPoint: Documents/ORO-CONNECT
+          entryPoint: .
