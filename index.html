@@ -78,6 +78,7 @@ https://resource.zegocloud.com;
 <!-- 1. Supabase Library Waamuu -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
+/* --- assets/css/style.css--- */
 @import url('./base/variables.css');
 @import url('./base/reset.css');
 @import url('./components/buttons.css');
@@ -87,6 +88,18 @@ https://resource.zegocloud.com;
 @import url('./pages/profile.css');
 @import url('./pages/chat.css');
 @import url('./pages/video.css');
+
+/* --- assets/css/style.css--- */
+@import url('./base/variables.css');
+@import url('./base/reset.css');
+@import url('./components/buttons.css');
+@import url('./components/cards.css');
+@import url('./components/navbar.css');
+@import url('./pages/feed.css');
+@import url('./pages/profile.css');
+@import url('./pages/chat.css');
+@import url('./pages/video.css');
+
 :root {
 color-scheme: light;
 --o-green: #20a957;
@@ -2139,7 +2152,7 @@ font-weight: bold;
 #calls-section .oro-call-history-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
 #calls-section .oro-call-history h3{margin:0;font-size:16px;color:var(--text-main)}
 #calls-section #call-logs-container{min-height:100px;max-height:420px;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid rgba(127,127,127,.15);border-radius:14px;background:var(--bg-main)}
-#calls-section #call-logs-container:empty:after{content:"Galmee bilbilaa fe’aa jira…";display:block;text-align:center;padding:25px 8px;opacity:.65;font-size:13px}
+#calls-section #call-logs-container:empty:after{content:'Galmee bilbilaa fe’aa jira…';display:block;text-align:center;padding:25px 8px;opacity:.65;font-size:13px}
 #calls-section .oro-call-new{border:1px solid rgba(32,169,87,.35);background:transparent;color:var(--o-green);border-radius:10px;padding:8px 11px;font-size:12px;font-weight:800}
 @media(max-width:420px){#calls-section .oro-call-actions{padding:12px;gap:8px}#calls-section .oro-call-action{font-size:12px;padding:10px 7px}#calls-section .oro-call-history{padding:12px}}
 .profile-action-grid {
@@ -2216,7 +2229,11 @@ textarea {
 resize: vertical;
 min-height: 100px;
 }
-
+*,
+*::before,
+*::after {
+box-sizing: border-box;
+}
 html,
 body {
 max-width: 100%;
@@ -3345,30 +3362,6 @@ box-sizing: border-box;
 width: 100%;
 flex-shrink: 0;
 }
-.chat-record-btn,
-#record-btn {
-    position: relative;
-    z-index: 12;
-    pointer-events: auto !important;
-    cursor: pointer;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-    font-size: 1.25rem;
-    width: 40px;
-    height: 40px;
-    min-width: 40px;
-    min-height: 40px;
-    border: none;
-    outline: none;
-    border-radius: 50%;
-    background: rgba(255,255,255,.06);
-    color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    transition: background .2s ease, transform .2s ease;
-}
 .chat-attach-btn,
 #record-btn {
 cursor: pointer;
@@ -3386,25 +3379,6 @@ transition: .2s;
 #record-btn {
 border: none;
 color: #fff;
-}
-#voice-preview {
-    display: none;
-    width: 100%;
-    padding: 12px;
-    box-sizing: border-box;
-    background: #242526;
-    border-top: 1px solid rgba(255, 255, 255, .08);
-}
-
-#voice-preview audio {
-    display: block;
-    width: 100%;
-    height: 45px;
-}
-#record-btn.recording {
-    background: rgba(255,59,48,.18) !important;
-    color: #ff3b30 !important;
-    animation: oroRecordingPulse 1s infinite;
 }
 #chat-media-input {
 display: none;
@@ -3443,43 +3417,15 @@ font-size: 1rem;
 color: white;
 }
 #record-status {
-    display: none;
-    width: 100%;
-    box-sizing: border-box;
-    font-size: 13px;
-    color: #fff;
-    padding: 10px;
-    background: #fa3e3e;
-    text-align: center;
-    font-weight: 600;
-    flex-shrink: 0;
-    letter-spacing: .5px;
-}
-.chat-record-btn {
-    position: relative;
-    z-index: 10;
-    pointer-events: auto !important;
-    cursor: pointer;
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
-}
-.chat-record-btn:active,
-#record-btn:active {
-    transform: scale(.92);
-    background: rgba(255,255,255,.12);
-}
-.chat-record-btn.recording,
-#record-btn.recording {
-    color: #ff3b30 !important;
-    background: rgba(255, 59, 48, .15) !important;
-    animation: oroRecordingPulse 1s infinite;
-}
-
-@@keyframes oroRecordingPulse {
-    50% {
-        opacity: .55;
-        transform: scale(.94);
-    }
+font-size: 13px;
+color: white;
+padding: 10px;
+display: none;
+background: #fa3e3e;
+text-align: center;
+font-weight: 600;
+flex-shrink: 0;
+letter-spacing: .5px;
 }
 #notifications-section {
 display: none;
@@ -4090,7 +4036,9 @@ gap: 8px;
 .settings-privacy-heading span {
 color: var(--o-green);
 }
-
+.setting-item {
+margin-bottom: 15px;
+}
 .setting-item p {
 margin: 0 0 8px;
 font-size: 14px;
@@ -4340,157 +4288,95 @@ border: none;
 background: var(--o-red);
 color: white;
 }
-/* =========================================
-   ORO CONNECT — USER PROFILE SIDE MODAL
-========================================= */
-
-/* =====================================
-   ORO CONNECT — PROFILE SIDE POPUP
-===================================== */
-
 #profile-modal {
-    display: none;
-    position: fixed !important;
-    inset: 0 !important;
-    z-index: 999999 !important;
-    
-    width: 100vw !important;
-    height: 100vh !important;
-    height: 100dvh !important;
-    
-    margin: 0 !important;
-    padding: 0 !important;
-    box-sizing: border-box !important;
-    
-    background: rgba(0, 0, 0, .6);
-    -webkit-backdrop-filter: blur(4px);
-    backdrop-filter: blur(4px);
+display: none !important;
+position: fixed;
+z-index: 999999 !important;
+left: 0;
+top: 0;
+width: 100vw;
+height: 100vh;
+background: rgba(0,0,0,.6);
+margin: 0;
+padding: 0;
+backdrop-filter: blur(4px);
 }
-
-/* HTML kee keessatti wrapper sirrii */
-#profile-modal .profile-modal-wrapper {
-    display: flex !important;
-    justify-content: flex-start !important;
-    align-items: flex-start !important;
-    
-    width: 100% !important;
-    height: 100% !important;
-    
-    margin: 0 !important;
-    padding: 0 !important;
-    box-sizing: border-box !important;
+.profile-modal-center {
+display: flex;
+width: 100%;
+height: 100%;
+justify-content: center;
+align-items: center;
+box-sizing: border-box;
+padding: 15px;
 }
-
-/* Profile card — full screen miti */
-#profile-modal .modal-content.profile-modal-content {
-    position: relative !important;
-    
-    top: 0 !important;
-    left: 0 !important;
-    right: auto !important;
-    bottom: auto !important;
-    transform: none !important;
-    
-    display: block !important;
-    flex: 0 0 268px !important;
-    
-    width: 268px !important;
-    min-width: 0 !important;
-    max-width: 85vw !important;
-    
-    height: auto !important;
-    min-height: 0 !important;
-    max-height: 78vh !important;
-    max-height: 78dvh !important;
-    
-    margin: 0 !important;
-    padding: 20px !important;
-    
-    box-sizing: border-box !important;
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-    
-    background: var(--card-bg) !important;
-    color: var(--text-main) !important;
-    
-    border-radius: 0 18px 18px 0 !important;
-    border: 1px solid rgba(0, 0, 0, .05);
-    box-shadow: var(--shadow) !important;
+#profile-modal .modal-content {
+background: var(--card-bg) !important;
+color: var(--text-main) !important;
+border-radius: 20px !important;
+padding: 25px !important;
+box-shadow: var(--shadow) !important;
+position: relative !important;
+max-width: 380px !important;
+width: 100% !important;
+margin: 0 auto !important;
+border: 1px solid rgba(0,0,0,.05);
+max-height: 90vh;
+overflow-y: auto;
 }
-
-/* Close button */
 #profile-modal .close-modal {
-    color: var(--text-main);
-    opacity: .6;
-    font-size: 28px;
-    
-    position: absolute;
-    top: 12px;
-    right: 15px;
-    
-    cursor: pointer;
-    font-weight: bold;
-    transition: opacity .2s;
+color: var(--text-main);
+opacity: .6;
+font-size: 28px;
+position: absolute;
+top: 12px;
+right: 20px;
+cursor: pointer;
+font-weight: bold;
+transition: opacity .2s;
 }
-
 #profile-modal .close-modal:hover {
-    opacity: 1;
+opacity: 1;
 }
-
-/* More options */
 #profile-more-options {
-    display: none;
-    position: absolute;
-    top: 16px;
-    left: 20px;
-    
-    cursor: pointer;
-    font-size: 1.1rem;
-    opacity: .6;
+display: none;
+position: absolute;
+top: 16px;
+left: 20px;
+cursor: pointer;
+font-size: 1.1rem;
+opacity: .6;
 }
-
-/* Dropdown menu */
 #profile-drop-menu {
-    display: none;
-    position: absolute;
-    top: 40px;
-    left: 20px;
-    
-    background: var(--card-bg);
-    border: 1px solid rgba(0, 0, 0, .1);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, .15);
-    
-    border-radius: 8px;
-    z-index: 10010;
-    
-    width: 130px;
-    text-align: left;
-    padding: 5px 0;
+display: none;
+position: absolute;
+top: 40px;
+left: 20px;
+background: var(--card-bg);
+border: 1px solid rgba(0,0,0,.1);
+box-shadow: 0 4px 12px rgba(0,0,0,.15);
+border-radius: 8px;
+z-index: 10010;
+width: 130px;
+text-align: left;
+padding: 5px 0;
 }
-
 #block-user-btn,
 #report-user-btn {
-    padding: 8px 12px;
-    font-size: 13px;
-    cursor: pointer;
+padding: 8px 12px;
+font-size: 13px;
+cursor: pointer;
 }
-
 #block-user-btn {
-    color: #e74c3c;
-    font-weight: 600;
+color: #e74c3c;
+font-weight: 600;
 }
-
 #block-user-btn:hover {
-    background: rgba(231, 76, 60, .1);
+background: rgba(231,76,60,.1);
 }
-
 #report-user-btn {
-    color: var(--text-main);
+color: var(--text-main);
 }
-
-
 #report-user-btn:hover {
 background: rgba(0,0,0,.05);
 }
@@ -4959,9 +4845,15 @@ button:disabled,[aria-disabled="true"]{cursor:not-allowed}
 .mobile-header{padding-top:max(12px,var(--safe-area-top))}
 input,select,textarea{color:var(--text-main);background-color:var(--card-bg)}
 input[type="checkbox"],input[type="radio"]{width:auto;min-height:0}
-
+:focus-visible{outline:2px solid var(--o-blue);outline-offset:3px}
 @media(max-width:380px){.form-container{padding:18px}.modal-content,.modal-card{padding:18px}.profile-page-container{padding:12px}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto!important}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+/* =========================================================
+   ORO-CONNECT — VISUAL POLISH LAYER
+   Presentation-only overrides: no HTML, JS, content or
+   interaction behavior is changed.
+   ========================================================= */
 :root {
   --oro-accent-soft: rgba(218, 41, 28, .09);
   --oro-green-soft: rgba(32, 169, 87, .10);
@@ -5084,148 +4976,77 @@ textarea:focus {
   .card:hover { border-color: color-mix(in srgb, var(--o-red) 16%, var(--border-color)); }
 }
 @media (max-width: 600px) {
-
-    .card,
-    .profile-card-dynamic {
-        border-radius: 15px;
-    }
-
-    .modal-content,
-    .modal-card {
-        border-radius: 18px;
-    }
-
-    /* Profile overlay */
-    #profile-modal {
-        position: fixed !important;
-        inset: 0 !important;
-        width: 100vw !important;
-        height: 100dvh !important;
-    }
-
-    /* HTML profile wrapper */
-    #profile-modal .profile-modal-wrapper {
-        display: flex !important;
-        justify-content: flex-start !important;
-        align-items: flex-start !important;
-
-        width: 100% !important;
-        height: 100% !important;
-
-        margin: 0 !important;
-        padding: 0 !important;
-    }
-
-    /* Profile card only */
-    #profile-modal .modal-content.profile-modal-content {
-        position: relative !important;
-        flex: 0 0 268px !important;
-
-        width: 268px !important;
-        min-width: 0 !important;
-        max-width: 85vw !important;
-
-        height: auto !important;
-        min-height: 0 !important;
-        max-height: 78dvh !important;
-
-        top: 0 !important;
-        left: 0 !important;
-        right: auto !important;
-        bottom: auto !important;
-
-        margin: 0 !important;
-        padding: 20px !important;
-
-        transform: none !important;
-        box-sizing: border-box !important;
-
-        overflow-x: hidden !important;
-        overflow-y: auto !important;
-
-        border-radius: 0 18px 18px 0 !important;
-    }
+  .card,
+  .profile-card-dynamic { border-radius: 15px; }
+  .modal-content,
+  .modal-card { border-radius: 18px; }
 }
-
-/* Reduced motion — akkuma duraanii */
 @media (prefers-reduced-motion: reduce) {
-    .icon-btn,
-    .btn,
-    .btn-small,
-    .profile-action-grid > button,
-    .oro-call-action {
-        transition: none;
-    }
+  .icon-btn,
+  .btn,
+  .btn-small,
+  .profile-action-grid > button,
+  .oro-call-action { transition: none; }
 }
 
-:where(.home-feed-container, .feed-left, .chat-layout-wrapper,
-       .settings-container, .profile-page-container, .video-info,
-       .video-details-overlay, .modal-content, .modal-card) {
-  min-width: 0;
+/* =========================================================
+   ORO-CONNECT — SETTINGS / PERSONAL DETAILS PHOTO
+   One consolidated override; does not affect feed/post images.
+   ========================================================= */
+
+#settings-page .settings-photo-wrapper,
+#personal-details .settings-photo-wrapper {
+  position: relative !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 60px !important;
+  height: 60px !important;
+  min-width: 60px !important;
+  max-width: 60px !important;
+  min-height: 60px !important;
+  max-height: 60px !important;
+  margin: 0 auto 12px !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  box-sizing: border-box !important;
 }
 
-:where(button, input, select, textarea) {
-  max-width: 100%;
+#settings-page .settings-profile-photo,
+#personal-details .settings-profile-photo,
+#settings-page img.settings-profile-photo,
+#personal-details img.settings-profile-photo {
+  display: block !important;
+  width: 60px !important;
+  height: 60px !important;
+  min-width: 60px !important;
+  max-width: 60px !important;
+  min-height: 60px !important;
+  max-height: 60px !important;
+  aspect-ratio: 1 / 1 !important;
+  object-fit: cover !important;
+  object-position: center !important;
+  border-radius: 50% !important;
+  box-sizing: border-box !important;
+  flex: 0 0 60px !important;
 }
 
-:where(img, video, iframe, canvas, svg) {
-  max-inline-size: 100%;
-}
-
-/* Keep keyboard focus visible and ensure disabled controls are unmistakable. */
-:where(button, [role="button"], a, input, select, textarea):focus-visible {
-  outline: 2px solid var(--o-blue);
-  outline-offset: 3px;
-}
-
-:where(button, input, select, textarea):disabled,
-[aria-disabled="true"] {
-  cursor: not-allowed;
-  opacity: .6;
-}
-
-/* Avoid accidental text selection on frequently tapped controls. */
-:where(button, [role="button"], .icon-btn, .video-action-btn) {
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-/* Improve long labels, URLs, captions, and user-generated text wrapping. */
-:where(.msg, .msg-bubble, .profile-bio, .video-caption,
-       .eula-text, .privacy-body, .dropdown-item) {
-  overflow-wrap: anywhere;
-  word-break: normal;
-}
-
-/* Safe-area-aware bottom controls on notched mobile devices. */
-@supports (padding: max(0px)) {
-  :where(.video-controls, .video-call-controls) {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-}
-
-/* Respect platform contrast preferences without changing the theme palette. */
-@media (prefers-contrast: more) {
-  :where(button, input, select, textarea, .card, .modal-content, .modal-card) {
-    border-width: 2px;
-  }
-}
-
-/* Keep content readable and controls usable on narrow screens. */
-@media (max-width: 360px) {
-  .form-container {
-    width: calc(100% - 16px);
-    padding: 14px;
-  }
-  .page > .main-content,
-  .page > main,
-  .page > .page-content {
-    padding: 8px;
-  }
-  .modal,
-  .modal-overlay {
-    padding: 8px;
-  }
+#settings-page .settings-photo-change,
+#personal-details .settings-photo-change {
+  position: absolute !important;
+  right: -2px !important;
+  bottom: -2px !important;
+  width: 25px !important;
+  height: 25px !important;
+  min-width: 25px !important;
+  min-height: 25px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 50% !important;
+  z-index: 2 !important;
+  border: 2px solid var(--card-bg) !important;
+  box-shadow: var(--shadow-sm) !important;
 }
 
 </style>
