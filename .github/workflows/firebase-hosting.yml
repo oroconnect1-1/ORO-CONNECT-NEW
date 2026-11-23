@@ -14,10 +14,30 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Find Firebase Configuration
+        id: firebase_config
+        run: |
+          echo "Searching for firebase.json..."
+
+          CONFIG=$(find . -type f -name "firebase.json" \
+            -not -path "./.git/*" | head -n 1)
+
+          if [ -z "$CONFIG" ]; then
+            echo "ERROR: firebase.json was not found."
+            echo "Repository files:"
+            find . -maxdepth 4 -type f | head -200
+            exit 1
+          fi
+
+          CONFIG_DIR=$(dirname "$CONFIG")
+
+          echo "Firebase configuration found: $CONFIG"
+          echo "directory=$CONFIG_DIR" >> "$GITHUB_OUTPUT"
+
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           projectId: oro-connect-1f468
           channelId: live
-          entryPoint: .
+          entryPoint: ${{ steps.firebase_config.outputs.directory }}
