@@ -78,6 +78,16 @@ https://resource.zegocloud.com;
 <!-- 1. Supabase Library Waamuu -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
+/* --- assets/css/style.css--- */
+@import url('./base/variables.css');
+@import url('./base/reset.css');
+@import url('./components/buttons.css');
+@import url('./components/cards.css');
+@import url('./components/navbar.css');
+@import url('./pages/feed.css');
+@import url('./pages/profile.css');
+@import url('./pages/chat.css');
+@import url('./pages/video.css');
 
 /* --- assets/css/style.css--- */
 @import url('./base/variables.css');
@@ -4979,10 +4989,6 @@ textarea:focus {
   .oro-call-action { transition: none; }
 }
 
-/* =========================================================
-   ORO-CONNECT — SETTINGS / PERSONAL DETAILS PHOTO
-   One consolidated override; does not affect feed/post images.
-   ========================================================= */
 
 #settings-page .settings-photo-wrapper,
 #personal-details .settings-photo-wrapper {
@@ -7685,20 +7691,120 @@ const supabaseKey =
     'sb_publishable_R5gWnXmU8qgUUoCOMBav-w_bwJNSlXO';
 
 // Initialize Supabase Client
+// ================================================
+// ORO-CONNECT — SUPABASE + FIREBASE AUTH
+// ================================================
+
 if (!window.supabase) {
     throw new Error(
-        '[ORO-SUPABASE] Supabase SDK hin fe\'amne!'
+        "[ORO-SUPABASE] Supabase SDK hin fe'amne!"
     );
 }
 
-const supabaseClient = window.supabase.createClient(
-    supabaseUrl,
-    supabaseKey
+const functionsInstance = getFunctions(
+    app,
+    "us-central1"
 );
 
+const ensureSupabaseRoleCallable = httpsCallable(
+    functionsInstance,
+    "ensureSupabaseRole"
+);
+
+// Fayyadamaa tokkoof yeroo tokko qofa role mirkaneessa.
+let supabaseRolePromise = null;
+let supabaseRoleUid = null;
+
+async function ensureSupabaseRole() {
+    
+    const currentUser = auth.currentUser;
+    
+    if (!currentUser) {
+        throw new Error(
+            "Supabase fayyadamuuf dura account seenuu qabda."
+        );
+    }
+    
+    const uid = currentUser.uid;
+    
+    // Yoo fayyadamaan jijjiirame, cache haaromsi.
+    if (supabaseRoleUid !== uid) {
+        supabaseRoleUid = uid;
+        supabaseRolePromise = null;
+    }
+    
+    if (!supabaseRolePromise) {
+        
+        supabaseRolePromise = (async () => {
+            
+            await ensureSupabaseRoleCallable({});
+            
+            // Token keessatti role haaraa fe'i.
+            await currentUser.getIdToken(true);
+            
+            const tokenResult =
+                await currentUser.getIdTokenResult();
+            
+            if (
+                tokenResult.claims.role !== "authenticated"
+            ) {
+                throw new Error(
+                    "Firebase role authenticated hin mirkanoofne."
+                );
+            }
+            
+            console.info(
+                "[ORO-SUPABASE] Authenticated role confirmed."
+            );
+            
+            return true;
+            
+        })().catch(error => {
+            
+            supabaseRolePromise = null;
+            
+            console.error(
+                "[ORO-SUPABASE] Role verification failed:",
+                error
+            );
+            
+            throw error;
+        });
+    }
+    
+    return supabaseRolePromise;
+}
+
+
+// Initialize Supabase Client
+const supabaseClient = window.supabase.createClient(
+    supabaseUrl,
+    supabaseKey,
+    {
+        accessToken: async () => {
+            
+            const currentUser = auth.currentUser;
+            
+            if (!currentUser) {
+                return null;
+            }
+            
+            // Role mirkaneessi; token haaromsi.
+            await ensureSupabaseRole();
+            
+            return await currentUser.getIdToken();
+        }
+    }
+);
+
+window.supabaseClient = supabaseClient;
+
+// Function kana bakka biraattis fayyadamuuf.
+window.ensureSupabaseRole = ensureSupabaseRole;
+
 console.info(
-    '[ORO-SUPABASE] Supabase initialized successfully.'
-);   
+    "[ORO-SUPABASE] Supabase initialized successfully."
+);
 /* =========================================
    ORO-CONNECT — PRODUCTION APP SERVICE
    ========================================= */
@@ -7775,6 +7881,7 @@ window.AppService = Object.freeze({
     methods: firebaseMethods,
     
     rtdbMethods,
+    ensureSupabaseRole,
     
     sanitizeText(input) {
         const value = String(input ?? "");
@@ -21124,115 +21231,125 @@ let recordSeconds = 0;
        SEND VOICE MESSAGE
     ========================================= */
 
-    window.handleSendVoiceMessage = async function () {
-
-        if (voice.sending) return false;
-
-        const sendBtn = $("send-voice-message-btn");
-
-        try {
-
-            let blob = voice.audioBlob;
-
-            if (
-                !blob?.size &&
-                voice.recorder?.state === "recording"
-            ) {
-                blob = await window.stopRecording();
-            }
-
-            if (!blob || !blob.size) {
-                throw new Error(
-                    "Duraan sagalee waraabi."
-                );
-            }
-
-            const auth =
-                window.AppService?.auth ||
-                window.auth;
-
-            const currentUser = auth?.currentUser;
-
-            if (!currentUser) {
-                throw new Error(
-                    "Ergaa erguuf dura seeni."
-                );
-            }
-
-            let receiverUid =
-                window.selectedChatUser ||
-                (typeof selectedChatUser !== "undefined"
-                    ? selectedChatUser
-                    : null);
-
-            if (receiverUid && typeof receiverUid === "object") {
-                receiverUid = receiverUid.uid;
-            }
-
-            if (!receiverUid || receiverUid === currentUser.uid) {
-                throw new Error(
-                    "Nama chatting filadhu."
-                );
-            }
-
-            if (typeof window.sendVoiceMessage !== "function") {
-                throw new Error(
-                    "Firebase sendVoiceMessage hin argamne."
-                );
-            }
-
-            voice.sending = true;
-
-            if (sendBtn) {
-                sendBtn.disabled = true;
-                sendBtn.textContent = "Ergamaa jira...";
-            }
-
-            console.log("[ORO VOICE] Sending started.");
-
-            await window.sendVoiceMessage(
-                blob,
-                receiverUid
-            );
-
-            // Erguun milkaa'eera.
-            voice.audioBlob = null;
-            voice.chunks = [];
-
-            clearPreview();
-
-            console.log(
-                "[ORO VOICE] Message sent successfully."
-            );
-
-            return true;
-
-        } catch (error) {
-
-            console.error("[ORO VOICE] Send failed:", {
-                name: error?.name,
-                message: error?.message,
-                code: error?.code
-            });
-
-            alert(
-                "Ergaa sagalee erguun hin milkoofne: " +
-                (error?.message || error)
-            );
-
-            return false;
-
-        } finally {
-
-            voice.sending = false;
-
-            if (sendBtn) {
-                sendBtn.disabled = false;
-                sendBtn.textContent = "➤ Send";
-            }
+    window.handleSendVoiceMessage = async function() {
+    
+    const voice = window.__ORO_VOICE__;
+    
+    if (!voice || voice.sending) return false;
+    
+    const sendBtn = document.getElementById(
+        "send-voice-message-btn"
+    );
+    
+    try {
+        let blob = voice.audioBlob;
+        
+        if (
+            !blob?.size &&
+            voice.recorder?.state === "recording"
+        ) {
+            blob = await window.stopRecording();
         }
-    };
-
+        
+        if (!blob || !blob.size) {
+            throw new Error("Duraan sagalee waraabi.");
+        }
+        
+        const authService =
+            window.AppService?.auth ||
+            window.auth;
+        
+        const currentUser = authService?.currentUser;
+        
+        if (!currentUser) {
+            throw new Error("Ergaa erguuf dura seeni.");
+        }
+        
+        let receiverUid =
+            window.selectedChatUser ||
+            (typeof selectedChatUser !== "undefined" ?
+                selectedChatUser :
+                null);
+        
+        if (receiverUid && typeof receiverUid === "object") {
+            receiverUid = receiverUid.uid;
+        }
+        
+        if (
+            !receiverUid ||
+            receiverUid === currentUser.uid
+        ) {
+            throw new Error("Nama chatting filadhu.");
+        }
+        
+        if (typeof window.sendVoiceMessage !== "function") {
+            throw new Error("Firebase sendVoiceMessage hin argamne.");
+        }
+        
+        voice.sending = true;
+        
+        if (sendBtn) {
+            sendBtn.disabled = true;
+            sendBtn.textContent = "Ergamaa jira...";
+        }
+        
+        showStatus("Sagalee fe'amaa jira...");
+        
+        console.log("[ORO VOICE] Sending started.");
+        
+        const result = await window.sendVoiceMessage(
+            blob,
+            receiverUid
+        );
+        
+        // false yoo ta'e akka milkaa'eetti hin fudhatin.
+        if (result !== true) {
+            throw new Error(
+                "Firebase sagalee erguu hin mirkaneessine."
+            );
+        }
+        
+        // Erguun mirkanaa'eera.
+        voice.audioBlob = null;
+        voice.chunks = [];
+        
+        clearPreview();
+        hideStatus();
+        
+        console.log("[ORO VOICE] Message sent successfully.");
+        
+        return true;
+        
+    } catch (error) {
+        
+        console.error("[ORO VOICE] Send failed:", {
+            name: error?.name,
+            message: error?.message,
+            code: error?.code
+        });
+        
+        showStatus(
+            "Erguun hin milkoofne. Irra deebi'i."
+        );
+        
+        alert(
+            "Ergaa sagalee erguun hin milkoofne: " +
+            (error?.message || error)
+        );
+        
+        // Sagalee hin haqin; fayyadamaan irra deebi'ee erguu danda'a.
+        return false;
+        
+    } finally {
+        
+        voice.sending = false;
+        
+        if (sendBtn) {
+            sendBtn.disabled = false;
+            sendBtn.textContent = "➤ Send";
+        }
+    }
+};
 
     /* =========================================
        BUTTON INITIALIZATION
@@ -22321,8 +22438,7 @@ window.loadSuggestions = (myFollowing = [], blockedIds = new Set()) => {
         docs.forEach(d => {
             const u = d.data();
             const realUid = d.id;
-            const followersArray = Array.isArray(u.followers) ? u.followers : [];
-            const isAlreadyFollowing = myFollowing.includes(realUid) || followersArray.includes(currentUserId);
+            const isAlreadyFollowing = myFollowing.includes(realUid);
             if (realUid !== currentUserId && !blockedIds.has(realUid) && !isAlreadyFollowing) {
                 if (count >= 5) return;
                 const realName = u.displayName || u.userName || u.name || "Fayyadamaa ORO";
@@ -22394,20 +22510,78 @@ window.monitorUserPresence = () => {
     window.addEventListener('offline', () => updateDoc(userStatusRef, { isOnline: false, lastSeen: serverTimestamp() }));
 };
 window.ensureChatDocument = async (chatId, receiverUid) => {
-    const currentUser = auth.currentUser;
-    if (!currentUser || !receiverUid || currentUser.uid === receiverUid) return false;
+    const user = auth.currentUser;
+    
+    if (
+        !user ||
+        typeof receiverUid !== "string" ||
+        !receiverUid.trim() ||
+        user.uid === receiverUid.trim()
+    ) {
+        return false;
+    }
+    
+    receiverUid = receiverUid.trim();
+    
+    const participants = [user.uid, receiverUid].sort();
+    
+    // Chat ID sirrii ta'uu mirkaneessi.
+    const expectedChatId = participants.join("_");
+    
+    if (chatId !== expectedChatId) {
+        console.error("[ORO CHAT] Chat ID hin sirrii.");
+        return false;
+    }
+    
+    const chatRef = doc(db, "chats", chatId);
+    
     try {
-        await setDoc(doc(db, "chats", chatId), {
-            participants: [currentUser.uid, receiverUid],
+        const chatSnap = await getDoc(chatRef);
+        
+        // Chat duraan jira.
+        if (chatSnap.exists()) {
+            const existingParticipants =
+                chatSnap.data().participants;
+            
+            if (
+                !Array.isArray(existingParticipants) ||
+                existingParticipants.length !== 2 ||
+                !participants.every(uid =>
+                    existingParticipants.includes(uid)
+                )
+            ) {
+                console.error(
+                    "[ORO CHAT] Participants wal hin simne."
+                );
+                return false;
+            }
+            
+            // Participants hin jijjiirin.
+            await updateDoc(chatRef, {
+                updatedAt: serverTimestamp()
+            });
+            
+            return true;
+        }
+        
+        // Chat hin jiru; haaraa uumi.
+        await setDoc(chatRef, {
+            participants,
             updatedAt: serverTimestamp()
-        }, { merge: true });
+        });
+        
         return true;
-    } catch (err) {
-        console.error("Ensure chat error:", err);
+        
+    } catch (error) {
+        console.error("[ORO CHAT] Ensure chat failed:", {
+            code: error.code,
+            message: error.message,
+            chatId
+        });
+        
         return false;
     }
 };
-
 window.sendMessage = async (text, receiverUid) => {
     const user = auth.currentUser;
 
@@ -22648,55 +22822,53 @@ try {
         throw new Error("Media URL argachuu hin dandeenye.");
     }
 
-    let mediaType = "document";
-    let notificationText = `📄 ${safeFileName}`;
+    let mediaType = "file";
+let notificationText = `📄 ${safeFileName}`;
 
-    if (file.type.startsWith("image/")) {
-        mediaType = "image";
-        notificationText = "📷 Suuraa ergeera";
-
-    } else if (file.type.startsWith("video/")) {
-        mediaType = "video";
-        notificationText = "🎥 Viidiyoo ergeera";
-
-    } else if (file.type.startsWith("audio/")) {
-        mediaType = "voice";
+if (file.type.startsWith("image/")) {
+    mediaType = "image";
+    notificationText = "📷 Suuraa ergeera";
+    
+} else if (file.type.startsWith("video/")) {
+    mediaType = "video";
+    notificationText = "🎥 Viidiyoo ergeera";
+    
+} else if (file.type.startsWith("audio/")) {
+    mediaType = "audio";
+    notificationText = "🎵 Sagalee ergeera";
         notificationText = "🎵 Sagalee ergeera";
     }
 
     // Save message.
     const messageRef = await addDoc(
         collection(db, "chats", chatId, "messages"),
-        {
-            mediaUrl: downloadURL,
-            type: mediaType,
-            text: safeFileName,
-            senderId: myUid,
-            receiverId: receiverUid,
-            timestamp: now,
-            status: "sent"
-        }
+       {
+    mediaUrl: audioUrl,
+    type: "audio",
+    text: "🎵 Voice message",
+    senderId: myUid,
+    receiverId: receiverUid,
+    timestamp: now,
+    status: "sent"
+}
     );
 
     // Update chat preview.
-    await setDoc(
-        doc(db, "last_messages", chatId),
-        {
-            chatId: chatId,
-            users: [myUid, receiverUid],
-            lastText: notificationText,
-            lastMessage: notificationText,
-            lastTime: now,
-            lastMessageAt: now,
-            timestamp: now,
-            updatedAt: now,
-            lastSenderId: myUid,
-            lastMessageType: mediaType,
-            unreadBy: receiverUid,
-            lastMessageStatus: "sent"
-        },
-        { merge: true }
-    );
+   await setDoc(
+  doc(db, "last_messages", chatId),
+  {
+    chatId,
+    users: [myUid, receiverUid],
+    lastMessage: notificationText,
+    lastMessageAt: now,
+    updatedAt: now,
+    lastSenderId: myUid,
+    lastMessageType: mediaType,
+    unreadBy: receiverUid,
+    lastMessageStatus: "sent"
+  },
+  { merge: true }
+);
 
     completed = true;
 
@@ -22757,328 +22929,1024 @@ try {
 
 };
 window.sendVoiceMessage = async (audioBlob, receiverUid) => {
-
     try {
-
+        // =========================================
+        // 1. USER AUTHENTICATION
+        // =========================================
+        
         const user = auth.currentUser;
-
+        
         if (!user) {
             throw new Error("Maaloo dura seeni.");
         }
-
+        
         if (!audioBlob || !audioBlob.size) {
             throw new Error("Sagaleen waraabame hin jiru.");
         }
-
+        
         receiverUid = String(receiverUid || "").trim();
-
-        if (
-            !receiverUid ||
-            receiverUid === user.uid
-        ) {
+        
+        if (!receiverUid || receiverUid === user.uid) {
             throw new Error("Nama ergaa itti ergitu sirriitti filadhu.");
         }
-
+        
         if (!navigator.onLine) {
             throw new Error("Internet connection hin jiru.");
         }
-
+        
         const myUid = user.uid;
-
-        // Chat ID tokko qofa, fayyadamtoota lamaanifuu.
-        const chatId = [myUid, receiverUid]
-            .sort()
-            .join("_");
-
-        const now = serverTimestamp();
-
-        // Chat document mirkaneessi.
+        const chatId = [myUid, receiverUid].sort().join("_");
+        
+        // =========================================
+        // 2. ENSURE CHAT DOCUMENT
+        // =========================================
+        
         const chatReady = await window.ensureChatDocument(
             chatId,
             receiverUid
         );
-
+        
         if (!chatReady) {
             throw new Error("Chat uumuu hin dandeenye.");
         }
-
-        // Extension sagalee irratti hundaa'a.
+        
+        // =========================================
+        // 3. AUDIO FILE PREPARATION
+        // =========================================
+        
         const mimeType = audioBlob.type || "audio/webm";
-
+        
         const extension =
             mimeType.includes("ogg") ? "ogg" :
             mimeType.includes("mp4") ? "m4a" :
             mimeType.includes("mpeg") ? "mp3" :
             "webm";
-
-        const fileName =
-            `voice_messages/${chatId}/${Date.now()}_${myUid}.${extension}`;
-
-        // Firebase Storage.
-        const voiceRef = ref(storage, fileName);
-
-        const uploadResult = await uploadBytes(
-            voiceRef,
-            audioBlob,
+        
+        const voiceFile = new File(
+            [audioBlob],
+            `voice_${Date.now()}_${myUid}.${extension}`,
             {
-                contentType: mimeType
+                type: mimeType,
+                lastModified: Date.now()
             }
         );
-
-        const audioUrl = await getDownloadURL(
-            uploadResult.ref
-        );
-
-        if (!audioUrl) {
-            throw new Error("Sagalee Storage irraa argachuu hin dandeenye.");
+        
+        // =========================================
+        // 4. SUPABASE STORAGE UPLOAD
+        // =========================================
+        
+        if (
+            typeof window.uploadChatMediaToSupabase !== "function"
+        ) {
+            throw new Error(
+                "Supabase upload helper hin argamne."
+            );
         }
+        
+        const uploaded = await window.uploadVoiceToSupabase(
+    voiceFile,
+    chatId,
+    myUid
+);
 
-        // Firestore message.
+if (!uploaded?.url) {
+    throw new Error("Audio URL Supabase irraa hin argamne.");
+}
+        if (!uploaded || !uploaded.url) {
+            throw new Error(
+                "Supabase irraa audio URL argachuu hin dandeenye."
+            );
+        }
+        
+        const audioUrl = uploaded.url;
+        
+        // =========================================
+        // 5. SESSION VALIDATION
+        // =========================================
+        
+        if (auth.currentUser?.uid !== myUid) {
+            throw new Error("Session jijjiirame.");
+        }
+        
+        // =========================================
+        // 6. SAVE MESSAGE TO FIRESTORE
+        // =========================================
+        
+        const now = serverTimestamp();
+        
         const messageRef = await addDoc(
             collection(db, "chats", chatId, "messages"),
             {
                 mediaUrl: audioUrl,
-                type: "voice",
+                audioUrl: audioUrl,
+                
+                type: "audio",
                 text: "🎵 Voice message",
+                
                 senderId: myUid,
                 receiverId: receiverUid,
+                
                 timestamp: now,
                 status: "sent"
             }
         );
-
-        // Chat list update.
-        await setDoc(
-            doc(db, "last_messages", chatId),
-            {
-                chatId: chatId,
-                users: [myUid, receiverUid],
-                lastText: "🎵 Voice message",
-                lastMessage: "🎵 Voice message",
-                lastTime: now,
-                lastMessageAt: now,
-                timestamp: now,
-                updatedAt: now,
-                lastSenderId: myUid,
-                lastMessageType: "voice",
-                unreadBy: receiverUid,
-                lastMessageStatus: "sent"
-            },
-            { merge: true }
-        );
-
-        console.log(
-            "[ORO VOICE] Firestore message saved:",
-            messageRef.id
-        );
-
-        // Notification dogoggorri isaa ergaa hin balleessu.
+        
+        // =========================================
+        // 7. UPDATE CHAT PREVIEW
+        // =========================================
+        
         try {
-
+            await setDoc(
+                doc(db, "last_messages", chatId),
+                {
+                    chatId,
+                    
+                    users: [
+                        myUid,
+                        receiverUid
+                    ],
+                    
+                    lastMessage: "🎵 Voice message",
+                    lastMessageAt: now,
+                    updatedAt: now,
+                    
+                    lastSenderId: myUid,
+                    lastMessageType: "audio",
+                    
+                    unreadBy: receiverUid,
+                    lastMessageStatus: "sent"
+                },
+                {
+                    merge: true
+                }
+            );
+            
+        } catch (previewError) {
+            console.error(
+                "[ORO VOICE] Preview update failed:",
+                previewError
+            );
+        }
+        
+        // =========================================
+        // 8. SEND NOTIFICATION
+        // =========================================
+        
+        try {
             if (
                 typeof window.sendNotification === "function"
             ) {
                 await window.sendNotification(
                     receiverUid,
                     "new_voice_message",
-                    { chatId: chatId }
+                    {
+                        chatId,
+                        messageId: messageRef.id
+                    }
                 );
             }
-
+            
         } catch (notificationError) {
-
             console.error(
                 "[ORO VOICE] Notification failed:",
                 notificationError
             );
         }
-
+        
+        // =========================================
+        // 9. SUCCESS
+        // =========================================
+        
         console.log(
-            "[ORO VOICE] Voice message sent successfully."
+            "[ORO VOICE] Voice message sent:",
+            messageRef.id
         );
-
+        
         return true;
-
+        
     } catch (error) {
-
+        
+        // =========================================
+        // 10. ERROR HANDLING
+        // =========================================
+        
         console.error(
-            "[ORO VOICE] Firebase send error:",
+            "[ORO VOICE] Send failed:",
             {
-                message: error?.message,
                 code: error?.code,
+                message: error?.message,
                 name: error?.name
             }
         );
-
+        
+        alert(
+            "Sagalee erguun hin milkoofne: " +
+            (
+                error?.message ||
+                error?.code ||
+                "Dogoggorri hin beekamne uumame."
+            )
+        );
+        
         return false;
     }
 };
 function renderMessage(chatId, msgId, msgData) {
-    if (!auth.currentUser) return "";
-    const isMine = msgData.senderId === auth.currentUser.uid;
-    let time = "...";
-    const msgTime = msgData.timestamp;
-    if (msgTime) {
-        const d = msgTime.toMillis ? msgTime.toDate() : new Date(msgTime.seconds ? msgTime.seconds * 1000 : msgTime);
-        time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } else {
-        time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (!auth.currentUser || !msgData) return "";
+    
+    const myUid = auth.currentUser.uid;
+    const isMine = msgData.senderId === myUid;
+    
+    // HTML escape
+    const escapeHTML = (value) =>
+        String(value ?? "").replace(/[&<>"']/g, char => ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#039;"
+        })[char]);
+    
+    // URL validation: only HTTP/HTTPS
+    const safeURL = (value) => {
+        try {
+            const url = new URL(String(value || ""), window.location.origin);
+            
+            if (!["http:", "https:"].includes(url.protocol)) {
+                return "";
+            }
+            
+            return escapeHTML(url.href);
+        } catch {
+            return "";
+        }
+    };
+    
+    // Timestamp
+    let time = "";
+    
+    try {
+        const timestamp = msgData.timestamp;
+        let date;
+        
+        if (timestamp?.toDate) {
+            date = timestamp.toDate();
+        } else if (timestamp?.seconds) {
+            date = new Date(timestamp.seconds * 1000);
+        } else if (timestamp) {
+            date = new Date(timestamp);
+        } else {
+            date = new Date();
+        }
+        
+        time = !isNaN(date.getTime()) ?
+            date.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit"
+            }) :
+            "";
+    } catch {
+        time = "";
     }
-    const safeText = (msgData.text || "")
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-    let contentHTML = `<p style="margin: 0 !important; padding: 0 !important; font-size: 0.95rem; line-height: 1.4; word-break: break-word; color: white !important;">${safeText}</p>`;
-    if (msgData.mediaUrl) {
-        if (msgData.type === 'image') {
-            contentHTML = `<img src="${msgData.mediaUrl}" style="max-width: 100%; max-height: 240px; border-radius: 12px; margin-bottom: 5px; object-fit: cover; cursor: pointer;" onclick="window.open('${msgData.mediaUrl}')">`;
-        } else if (msgData.type === 'video') {
-            contentHTML = `<video src="${msgData.mediaUrl}" controls style="max-width: 100%; max-height: 240px; border-radius: 12px; margin-bottom: 5px;"></video>`;
-        } else if (msgData.type === 'voice') {
-            contentHTML = `<audio src="${msgData.mediaUrl}" controls style="max-width: 100%; margin-bottom: 5px;"></audio>`;
-        } else if (msgData.type === 'document') {
+    
+    const safeText = escapeHTML(msgData.text || "");
+    const mediaURL = safeURL(msgData.mediaUrl || msgData.audioUrl);
+    const messageType = String(msgData.type || "text").toLowerCase();
+    
+    // Default text content
+    let contentHTML = `
+        <p style="
+            margin:0;
+            padding:0;
+            font-size:0.95rem;
+            line-height:1.5;
+            word-break:break-word;
+            white-space:pre-wrap;
+            color:white;
+        ">${safeText}</p>
+    `;
+    
+    // Media content
+    if (mediaURL) {
+        if (messageType === "image") {
             contentHTML = `
-                <div style="display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px;">
-                    <span style="font-size: 24px;">📄</span>
-                    <div style="flex: 1; min-width: 0;">
-                        <p style="margin:0; font-size:0.85rem; color:white; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${safeText}</p>
+                <a href="${mediaURL}"
+                   target="_blank"
+                   rel="noopener noreferrer">
+                    <img
+                        src="${mediaURL}"
+                        alt="Image"
+                        loading="lazy"
+                        style="
+                            display:block;
+                            max-width:100%;
+                            max-height:240px;
+                            border-radius:12px;
+                            margin-bottom:5px;
+                            object-fit:cover;
+                        "
+                    >
+                </a>
+                ${safeText ? `<p style="color:white;margin:5px 0 0;">${safeText}</p>` : ""}
+            `;
+            
+        } else if (messageType === "video") {
+            contentHTML = `
+                <video
+                    src="${mediaURL}"
+                    controls
+                    preload="metadata"
+                    playsinline
+                    style="
+                        display:block;
+                        max-width:100%;
+                        max-height:240px;
+                        border-radius:12px;
+                        margin-bottom:5px;
+                    "
+                ></video>
+                ${safeText ? `<p style="color:white;margin:5px 0 0;">${safeText}</p>` : ""}
+            `;
+            
+        } else if (
+            messageType === "voice" ||
+            messageType === "audio"
+        ) {
+            contentHTML = `
+                <audio
+                    src="${mediaURL}"
+                    controls
+                    preload="metadata"
+                    style="width:100%;max-width:260px;margin-bottom:5px;"
+                ></audio>
+                ${safeText && safeText !== "🎵 Voice message"
+                    ? `<p style="color:white;margin:5px 0 0;">${safeText}</p>`
+                    : ""}
+            `;
+            
+        } else if (
+            messageType === "document" ||
+            messageType === "file"
+        ) {
+            contentHTML = `
+                <div style="
+                    display:flex;
+                    align-items:center;
+                    gap:10px;
+                    background:rgba(0,0,0,0.2);
+                    padding:10px;
+                    border-radius:8px;
+                ">
+                    <span style="font-size:24px;">📄</span>
+
+                    <div style="flex:1;min-width:0;">
+                        <p style="
+                            margin:0;
+                            font-size:0.85rem;
+                            color:white;
+                            overflow-wrap:anywhere;
+                        ">${safeText || "Faayilii"}</p>
                     </div>
-                    <a href="${msgData.mediaUrl}" target="_blank" download style="color: #64b5f6; text-decoration: none; font-weight: bold; font-size: 0.85rem;">Fudi</a>
-                </div>`;
+
+                    <a
+                        href="${mediaURL}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style="
+                            color:#64b5f6;
+                            text-decoration:none;
+                            font-weight:bold;
+                            font-size:0.85rem;
+                        "
+                    >Fudi</a>
+                </div>
+            `;
         }
     }
+    
+    // Message status
     let statusTickHTML = "";
+    
     if (isMine) {
-        statusTickHTML = msgData.status === "read"
-            ? `<span style="color: #64b5f6 !important; font-weight: bold !important; font-size: 13px !important; margin-left: 6px !important; display: inline-block !important; letter-spacing: -2px !important;" title="Dubbifameera">✓✓</span>`
-            : `<span style="color: #ffffff !important; font-weight: bold !important; font-size: 13px !important; margin-left: 6px !important; display: inline-block !important;" title="Ergameera">✓</span>`;
+        if (msgData.status === "read") {
+            statusTickHTML = `
+                <span
+                    title="Dubbifameera"
+                    style="color:#64b5f6;font-weight:bold;font-size:13px;"
+                >✓✓</span>
+            `;
+        } else if (msgData.status === "delivered") {
+            statusTickHTML = `
+                <span
+                    title="Geesseera"
+                    style="color:#ffffff;font-weight:bold;font-size:13px;"
+                >✓✓</span>
+            `;
+        } else {
+            statusTickHTML = `
+                <span
+                    title="Ergameera"
+                    style="color:#ffffff;font-weight:bold;font-size:13px;"
+                >✓</span>
+            `;
+        }
     }
-    const bubbleBg = isMine ? 'var(--o-green, #2ecc71)' : '#2f3542';
-    const alignment = isMine ? 'justify-content: flex-end;' : 'justify-content: flex-start;';
-    const borderRadius = isMine ? 'border-radius: 16px 16px 4px 16px;' : 'border-radius: 16px 16px 16px 4px;';
+    
+    // Bubble appearance
+    const bubbleBg = isMine ?
+        "var(--o-green, #2ecc71)" :
+        "#2f3542";
+    
+    const alignment = isMine ?
+        "justify-content:flex-end;" :
+        "justify-content:flex-start;";
+    
+    const borderRadius = isMine ?
+        "border-radius:16px 16px 4px 16px;" :
+        "border-radius:16px 16px 16px 4px;";
+    
+    // Safe arguments for existing deleteMessage function
+    const safeChatId = escapeHTML(JSON.stringify(String(chatId)));
+    const safeMsgId = escapeHTML(JSON.stringify(String(msgId)));
+    
     return `
-    <div
-        class="message-wrapper"
-        data-is-mine="${isMine ? "true" : "false"}"
-        data-message-type="${msgData.type || "text"}"
-        style="display: flex; width: 100%; margin-bottom: 8px; ${alignment}"
-    >
-            <div class="message-bubble" style="max-width: 75%; padding: 12px 16px; ${borderRadius} background: ${bubbleBg} !important; color: white !important; display: flex; flex-direction: column; box-shadow: 0 1px 2px rgba(0,0,0,0.15);">
+        <div
+            class="message-wrapper"
+            data-is-mine="${isMine}"
+            data-message-type="${escapeHTML(messageType)}"
+            data-message-id="${escapeHTML(msgId)}"
+            style="
+                display:flex;
+                width:100%;
+                margin-bottom:8px;
+                ${alignment}
+            "
+        >
+            <div
+                class="message-bubble"
+                style="
+                    max-width:75%;
+                    min-width:50px;
+                    padding:12px 16px;
+                    ${borderRadius}
+                    background:${bubbleBg};
+                    color:white;
+                    display:flex;
+                    flex-direction:column;
+                    box-shadow:0 1px 2px rgba(0,0,0,0.15);
+                    overflow-wrap:anywhere;
+                "
+            >
                 ${contentHTML}
-                <div class="msg-meta" style="display: flex !important; align-items: center !important; justify-content: flex-end !important; gap: 4px !important; margin-top: 4px !important; font-size: 11px !important; opacity: 0.9 !important; width: 100% !important;">
-                    <span style="color: rgba(255,255,255,0.8) !important; font-weight: 400 !important; margin: 0 !important; padding: 0 !important;">${time}</span>
+
+                <div
+                    class="msg-meta"
+                    style="
+                        display:flex;
+                        align-items:center;
+                        justify-content:flex-end;
+                        gap:4px;
+                        margin-top:4px;
+                        font-size:11px;
+                        opacity:0.9;
+                        width:100%;
+                    "
+                >
+                    <span style="
+                        color:rgba(255,255,255,0.8);
+                        font-weight:400;
+                    ">${time}</span>
+
                     ${statusTickHTML}
-                    <span onclick="window.deleteMessage('${chatId}', '${msgId}')" style="cursor: pointer; margin-left: 6px !important; color: #ff8a80 !important; font-weight: bold;" title="Haqi">🗑️</span>
+
+                    <button
+                        type="button"
+                        onclick="window.deleteMessage(${safeChatId}, ${safeMsgId})"
+                        aria-label="Ergaa haqi"
+                        title="Haqi"
+                        style="
+                            cursor:pointer;
+                            margin-left:6px;
+                            padding:0;
+                            border:0;
+                            background:transparent;
+                            color:#ff8a80;
+                            font-size:14px;
+                        "
+                    >🗑️</button>
                 </div>
             </div>
         </div>
     `;
 }
-window.listenToChatMessages = function(chatId) {
+/* =========================================
+   ORO VOICE — SUPABASE UPLOAD
+   Bucket: Oro-image
+========================================= */
+
+window.uploadVoiceToSupabase = async function (
+    audioFile,
+    chatId,
+    userId
+) {
+    const client =
+        window.supabaseClient ||
+        (typeof supabaseClient !== "undefined"
+            ? supabaseClient
+            : null);
+
+    if (!client?.storage) {
+        throw new Error("Supabase connection hin argamne.");
+    }
+
+    if (!audioFile || !audioFile.size) {
+        throw new Error("Sagaleen hin jiru.");
+    }
+
+    if (!chatId || !userId) {
+        throw new Error("Chat ID ykn User ID hin jiru.");
+    }
+
+    const allowedTypes = [
+        "audio/webm",
+        "audio/ogg",
+        "audio/mp4",
+        "audio/mpeg"
+    ];
+
+    if (!allowedTypes.includes(audioFile.type)) {
+        throw new Error(
+            "Audio format kana Supabase hin deeggaru: " +
+            audioFile.type
+        );
+    }
+
+    const extension =
+        audioFile.type.includes("ogg") ? "ogg" :
+        audioFile.type.includes("mp4") ? "m4a" :
+        audioFile.type.includes("mpeg") ? "mp3" :
+        "webm";
+
+    const uniqueName =
+        typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+    const filePath =
+        `voice_messages/${chatId}/${userId}/${uniqueName}.${extension}`;
+
+    const { data, error } = await client
+        .storage
+        .from("Oro-image")
+        .upload(filePath, audioFile, {
+            contentType: audioFile.type,
+            upsert: false,
+            cacheControl: "3600"
+        });
+
+    if (error) {
+        console.error("[ORO VOICE] Supabase upload:", error);
+        throw error;
+    }
+
+    if (!data?.path) {
+        throw new Error("Sagalee upload gochuun hin milkoofne.");
+    }
+
+    const { data: publicData } = client
+        .storage
+        .from("Oro-image")
+        .getPublicUrl(data.path);
+
+    if (!publicData?.publicUrl) {
+        throw new Error("Audio URL argachuu hin dandeenye.");
+    }
+
+    return {
+        path: data.path,
+        url: publicData.publicUrl
+    };
+};
+// ==========================================
+// ORO-CONNECT CHAT MEDIA — SUPABASE UPLOAD
+// ==========================================
+
+window.uploadChatMediaToSupabase = async function(
+    file,
+    chatId,
+    userId,
+    folder = "chats"
+) {
+    // =========================================
+    // 1. SUPABASE CLIENT
+    // =========================================
+    
+    const client =
+        window.supabaseClient ||
+        (typeof supabaseClient !== "undefined" ?
+            supabaseClient :
+            null);
+    
+    if (!client?.storage) {
+        throw new Error("Supabase connection hin argamne.");
+    }
+    
+    // =========================================
+    // 2. VALIDATE INPUT
+    // =========================================
+    
+    if (!file || !file.size) {
+        throw new Error("Faayiliin hin jiru.");
+    }
+    
+    if (!chatId || !userId) {
+        throw new Error("Chat ID ykn User ID hin jiru.");
+    }
+    
+    if (file.size > 100 * 1024 * 1024) {
+        throw new Error("Faayiliin 100MB caaluu hin qabu.");
+    }
+    
+    // =========================================
+    // 3. ALLOWED FILE TYPES
+    // =========================================
+    
+    const allowed = [
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/gif",
+        "video/mp4",
+        "video/webm",
+        "audio/webm",
+        "audio/ogg",
+        "audio/mp4",
+        "audio/mpeg",
+        "application/pdf"
+    ];
+    
+    if (!allowed.includes(file.type)) {
+        throw new Error("File type kana hin deeggaru.");
+    }
+    
+    // =========================================
+    // 4. GENERATE UNIQUE FILE NAME
+    // =========================================
+    
+    const extension = file.name?.includes(".") ?
+        file.name.split(".").pop().toLowerCase() :
+        "bin";
+    
+    const uniqueName =
+        typeof crypto.randomUUID === "function" ?
+        crypto.randomUUID() :
+        `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    
+    const safeFolder = String(folder).replace(/^\/+|\/+$/g, "");
+    
+    const filePath =
+        `${safeFolder}/${chatId}/${userId}/${uniqueName}.${extension}`;
+    
+    // =========================================
+    // 5. UPLOAD TO SUPABASE STORAGE
+    // =========================================
+    
+    const { data, error } = await client
+        .storage
+        .from("media")
+        .upload(filePath, file, {
+            contentType: file.type,
+            upsert: false,
+            cacheControl: "3600"
+        });
+    
+    if (error) {
+        console.error("[ORO STORAGE] Upload failed:", error);
+        throw error;
+    }
+    
+    if (!data?.path) {
+        throw new Error("Supabase upload hin mirkanoofne.");
+    }
+    
+    // =========================================
+    // 6. GET PUBLIC URL
+    // =========================================
+    
+    const { data: publicData } = client
+        .storage
+        .from("media")
+        .getPublicUrl(data.path);
+    
+    const publicUrl = publicData?.publicUrl;
+    
+    if (!publicUrl) {
+        throw new Error("Supabase URL argachuu hin dandeenye.");
+    }
+    
+    // =========================================
+    // 7. RETURN RESULT
+    // =========================================
+    
+    return {
+        path: data.path,
+        url: publicUrl,
+        contentType: file.type,
+        size: file.size
+    };
+};
+window.listenToChatMessages = function (chatId) {
+    if (!chatId || !auth.currentUser) return;
+
+    // Listener duraanii dhaabi
     if (typeof activeChatUnsubscribe === "function") {
         activeChatUnsubscribe();
+        activeChatUnsubscribe = null;
     }
+
+    // Chat active godhi
     window.activeChatId = chatId;
+
     const messagesQuery = query(
         collection(db, "chats", chatId, "messages"),
         orderBy("timestamp", "asc")
     );
-    activeChatUnsubscribe = onSnapshot(messagesQuery, async (snapshot) => {
-        let finalChatHTML = "";
-        const currentUser = auth.currentUser;
-        const unreadMessagesRefs = [];
-        snapshot.forEach((msgDoc) => {
-            const msgData = msgDoc.data();
-            const msgId = msgDoc.id;
-            finalChatHTML += renderMessage(chatId, msgId, msgData);
-            if (currentUser && msgData.senderId !== currentUser.uid && msgData.status !== "read") {
-                unreadMessagesRefs.push(doc(db, "chats", chatId, "messages", msgId));
+
+    activeChatUnsubscribe = onSnapshot(
+        messagesQuery,
+
+        async (snapshot) => {
+            // Chat biraatti ce'e taanaan hojii dhaabi
+            if (window.activeChatId !== chatId) return;
+
+            const currentUser = auth.currentUser;
+            if (!currentUser) return;
+
+            let finalChatHTML = "";
+            const unreadMessagesRefs = [];
+
+            snapshot.forEach((msgDoc) => {
+                const msgData = msgDoc.data();
+
+                finalChatHTML += renderMessage(
+                    chatId,
+                    msgDoc.id,
+                    msgData
+                );
+
+                // Ergaa nama biraa irraa dhufe kan hin dubbifamne
+                if (
+                    msgData.senderId !== currentUser.uid &&
+                    msgData.status !== "read"
+                ) {
+                    unreadMessagesRefs.push(
+                        doc(
+                            db,
+                            "chats",
+                            chatId,
+                            "messages",
+                            msgDoc.id
+                        )
+                    );
+                }
+            });
+
+            // Ergaa hin dubbifamne read godhi
+            if (unreadMessagesRefs.length > 0) {
+                try {
+                    // Firestore batch tokko keessatti 500 ol hin dabarsin
+                    for (
+                        let i = 0;
+                        i < unreadMessagesRefs.length;
+                        i += 450
+                    ) {
+                        if (window.activeChatId !== chatId) return;
+
+                        const batch = writeBatch(db);
+
+                        unreadMessagesRefs
+                            .slice(i, i + 450)
+                            .forEach((messageRef) => {
+                                batch.update(messageRef, {
+                                    status: "read"
+                                });
+                            });
+
+                        await batch.commit();
+                    }
+
+                    // Unread indicator chat list keessatti qulqulleessi
+                    if (window.activeChatId === chatId) {
+                        await updateDoc(
+                            doc(db, "last_messages", chatId),
+                            {
+                                unreadBy: ""
+                            }
+                        ).catch((error) => {
+                            console.warn(
+                                "[ORO-MESSAGE] Unread counter update:",
+                                error
+                            );
+                        });
+                    }
+
+                } catch (error) {
+                    console.error(
+                        "[ORO-MESSAGE] Read receipt error:",
+                        error
+                    );
+                }
             }
-        });
-        if (unreadMessagesRefs.length > 0) {
-            try {
-                const batch = writeBatch(db);
-                unreadMessagesRefs.forEach((ref) => {
-                    batch.update(ref, { status: "read" });
+
+            // Chat window irratti ergaa agarsiisi
+            if (window.activeChatId !== chatId) return;
+
+            const chatWindow =
+                document.getElementById("chat-window") ||
+                document.getElementById("chat-messages-display");
+
+            if (chatWindow) {
+                chatWindow.innerHTML = finalChatHTML || `
+                    <div style="
+                        margin: auto;
+                        text-align: center;
+                        max-width: 260px;
+                        background: #2f3542;
+                        padding: 20px 15px;
+                        border-radius: 16px;
+                    ">
+                        <p style="
+                            color: white;
+                            opacity: 0.6;
+                            margin: 0;
+                            font-size: 13px;
+                        ">
+                            Ergaan duwwaadha. 👋
+                        </p>
+                    </div>
+                `;
+
+                requestAnimationFrame(() => {
+                    if (window.activeChatId === chatId) {
+                        chatWindow.scrollTop =
+                            chatWindow.scrollHeight;
+                    }
                 });
-                await batch.commit();
-                await updateDoc(doc(db, "last_messages", chatId), { unreadBy: "" })
-                    .catch(() => console.log("Last message update synced."));
-            } catch (error) {
-                console.error("Error updating status to read:", error);
             }
+        },
+
+        (error) => {
+            console.error(
+                "[ORO-MESSAGE] Messages listener error:",
+                error
+            );
         }
-        const chatWindow = document.getElementById("chat-window") || document.getElementById("chat-messages-display");
-        if (chatWindow) {
-            chatWindow.innerHTML = finalChatHTML || `
-                <div style="margin: auto; text-align: center; max-width: 260px; background: #2f3542; padding: 20px 15px; border-radius: 16px;">
-                    <p style="text-align: center; color: white; opacity: 0.6; margin: 0; font-size: 13px;">Ergaan duwwaadha. 👋</p>
-                </div>`;
-            setTimeout(() => {
-                chatWindow.scrollTop = chatWindow.scrollHeight;
-            }, 50);
-        }
-    }, (error) => {
-        console.error("Listen to chat messages error:", error);
-    });
-    listenToTypingStatus(chatId);
+    );
+
+    // Typing status dhaggeeffadhu
+    if (typeof listenToTypingStatus === "function") {
+        listenToTypingStatus(chatId);
+    }
 };
 function listenToTypingStatus(chatId) {
+    
     if (!chatId || !auth.currentUser) return;
-    onSnapshot(doc(db, "chats", chatId), (docSnap) => {
-        if (!docSnap.exists()) return;
-        const data = docSnap.data();
-        const myUid = auth.currentUser.uid;
-        const participants = chatId.split('_');
-        const otherUserId = participants.find(uid => uid !== myUid);
-        const typingDiv = document.getElementById('typing-indicator-display');
-        if (typingDiv && otherUserId) {
-            if (data.typingStatus && data.typingStatus[otherUserId] === true) {
-                typingDiv.innerText = "Barreessaa jira...";
+    
+    // Listener duraanii cufi.
+    if (typeof typingStatusUnsubscribe === "function") {
+        typingStatusUnsubscribe();
+        typingStatusUnsubscribe = null;
+    }
+    
+    const myUid = auth.currentUser.uid;
+    const chatRef = doc(db, "chats", chatId);
+    
+    typingStatusUnsubscribe = onSnapshot(
+        chatRef,
+        
+        (docSnap) => {
+            
+            // Chat biraatti ce'e yoo ta'e hojii dhaabi.
+            if (window.activeChatId !== chatId) return;
+            
+            if (!docSnap.exists()) return;
+            
+            const data = docSnap.data();
+            
+            // Participants Firestore irraa argadhu.
+            const participants = Array.isArray(data.participants) ?
+                data.participants :
+                chatId.split("_");
+            
+            const otherUserId = participants.find(
+                uid => uid !== myUid
+            );
+            
+            const typingDiv = document.getElementById(
+                "typing-indicator-display"
+            );
+            
+            if (!typingDiv || !otherUserId) return;
+            
+            const isTyping =
+                data.typingStatus?.[otherUserId] === true;
+            
+            if (isTyping) {
+                
+                typingDiv.textContent = "Barreessaa jira...";
                 typingDiv.style.visibility = "visible";
+                
             } else {
+                
+                typingDiv.textContent = "";
                 typingDiv.style.visibility = "hidden";
+                
             }
+        },
+        
+        (error) => {
+            console.error(
+                "[ORO-MESSAGE] Typing listener error:",
+                error
+            );
         }
-    });
+    );
 }
 let oroMessageSending = false;
 
 window.sendMessageTrigger = async () => {
     const input = document.getElementById("chat-msg-input");
     
-    if (!input || !selectedChatUser) return;
+    if (!input || !selectedChatUser || !auth.currentUser) {
+        return false;
+    }
     
     const text = input.value.trim();
     
-    if (!text || oroMessageSending) return;
+    if (!text || oroMessageSending) {
+        return false;
+    }
+    
+    // Odeeffannoo chat yeroo ergaa erginu qabsiisi
+    const receiverUid = selectedChatUser;
+    const chatId = window.activeChatId;
     
     oroMessageSending = true;
     
     const sendButton = document.getElementById("send-chat-btn");
     
-    if (sendButton) sendButton.disabled = true;
+    if (sendButton) {
+        sendButton.disabled = true;
+    }
     
     try {
+        if (auth.currentUser.uid === receiverUid) {
+            throw new Error("Ergaa ofitti erguun hin danda'amu.");
+        }
+        
+        if (!chatId) {
+            throw new Error("Chat hin banamne.");
+        }
+        
         const success = await window.sendMessage(
             text,
-            selectedChatUser
+            receiverUid
         );
         
         if (success) {
-            input.value = "";
-            
-            if (window.activeChatId) {
-                window.setTypingStatus(window.activeChatId, false);
+            // Chat hin jijjiiramne taanaan input qulqulleessi
+            if (
+                selectedChatUser === receiverUid &&
+                window.activeChatId === chatId &&
+                input.value.trim() === text
+            ) {
+                input.value = "";
             }
+            
+            // Typing status dhaamsi
+            if (typeof window.setTypingStatus === "function") {
+                await window.setTypingStatus(chatId, false);
+            }
+            
+            return true;
         }
         
+        return false;
+        
     } catch (error) {
-        console.error("[ORO-MESSAGE] Trigger error:", error);
+        console.error(
+            "[ORO-MESSAGE] Send trigger error:",
+            error
+        );
+        
+        return false;
         
     } finally {
         oroMessageSending = false;
         
-        if (sendButton) sendButton.disabled = false;
+        if (sendButton) {
+            sendButton.disabled = false;
+        }
     }
 };
 window.setTypingStatus = async function(chatId, status) {
@@ -23147,41 +24015,125 @@ window.setTypingStatus = async function(chatId, status) {
         return false;
     }
 };
-window.closeChatWindow = () => {
-    if (window.activeChatId) {
-        window.setTypingStatus(window.activeChatId, false);
+window.closeChatWindow = async () => {
+    const chatId = window.activeChatId;
+    
+    // Typing status dhaamsi
+    if (chatId && typeof window.setTypingStatus === "function") {
+        await window.setTypingStatus(chatId, false);
     }
-    const chatWin = document.getElementById("active-chat-window");
-    if (chatWin) chatWin.style.display = "none";
-};
-window.startChat = (uid, name, photo) => {
-    selectedChatUser = uid;
-    if (!auth.currentUser) return;
-    if (typeof switchSection === "function") {
-        switchSection('messages');
+    
+    // Typing listener dhaabi
+    if (typeof typingStatusUnsubscribe === "function") {
+        typingStatusUnsubscribe();
+        typingStatusUnsubscribe = null;
     }
+    
+    // Message listener dhaabi
+    if (typeof activeChatUnsubscribe === "function") {
+        activeChatUnsubscribe();
+        activeChatUnsubscribe = null;
+    }
+    
+    // Chat ID qulqulleessi
+    window.activeChatId = null;
+    
+    // Typing indicator qulqulleessi
+    const typingDiv = document.getElementById("typing-indicator-display");
+    if (typingDiv) {
+        typingDiv.textContent = "";
+        typingDiv.style.visibility = "hidden";
+    }
+    
+    // Chat window cufi
     const chatWin = document.getElementById("active-chat-window");
     if (chatWin) {
-        chatWin.style.display = "flex";
+        chatWin.style.display = "none";
     }
+};
+window.startChat = async (uid, name, photo) => {
+    const currentUser = auth.currentUser;
+    
+    if (!currentUser || !uid || currentUser.uid === uid) {
+        return false;
+    }
+    
+    selectedChatUser = uid;
+    
+    // Chat ID qopheessi
+    const myUid = currentUser.uid;
+    const chatId = myUid < uid ?
+        `${myUid}_${uid}` :
+        `${uid}_${myUid}`;
+    
+    // Listeners chat duraanii dhaabi
+    if (typeof activeChatUnsubscribe === "function") {
+        activeChatUnsubscribe();
+        activeChatUnsubscribe = null;
+    }
+    
+    if (typeof typingStatusUnsubscribe === "function") {
+        typingStatusUnsubscribe();
+        typingStatusUnsubscribe = null;
+    }
+    
+    // Chat haaraa active godhi
+    window.activeChatId = chatId;
+    
+    // Messages section bani
+    if (typeof switchSection === "function") {
+        switchSection("messages");
+    }
+    
+    const chatWin = document.getElementById("active-chat-window");
+    if (chatWin) chatWin.style.display = "flex";
+    
     const welcomeMsg = document.getElementById("chat-welcome-msg");
-    if (welcomeMsg) {
-        welcomeMsg.style.display = "none";
-    }
-    const headers = ['chatting-with-name', 'chatting-with'];
-    headers.forEach(h => {
-        const el = document.getElementById(h);
-        if (el) el.innerText = name;
+    if (welcomeMsg) welcomeMsg.style.display = "none";
+    
+    // Maqaa namaa agarsiisi
+    ["chatting-with-name", "chatting-with"].forEach(id => {
+        const element = document.getElementById(id);
+        if (element) element.textContent = name || "User";
     });
-    const chatPic = document.getElementById('chatting-with-pic');
+    
+    // Suuraa profile
+    const chatPic = document.getElementById("chatting-with-pic");
     if (chatPic) {
-        chatPic.src = photo || "https://cdn-icons-png.flaticon.com/512/149/149071.png";
+        chatPic.src = photo ||
+            "https://cdn-icons-png.flaticon.com/512/149/149071.png";
     }
-    const myUid = auth.currentUser.uid;
-    const chatId = myUid < uid ? `${myUid}_${uid}` : `${uid}_${myUid}`;
-    if (typeof window.ensureChatDocument === "function") window.ensureChatDocument(chatId, uid);
-    if (typeof window.listenToChatMessages === "function") {
-        window.listenToChatMessages(chatId);
+    
+    // Typing indicator qulqulleessi
+    const typingDiv = document.getElementById("typing-indicator-display");
+    if (typingDiv) {
+        typingDiv.textContent = "";
+        typingDiv.style.visibility = "hidden";
+    }
+    
+    try {
+        // Chat document mirkaneessi
+        if (typeof window.ensureChatDocument === "function") {
+            const ready = await window.ensureChatDocument(chatId, uid);
+            
+            if (!ready) {
+                throw new Error("Chat document mirkaneessuun hin danda'amne.");
+            }
+        }
+        
+        // Yeroo ensureChatDocument hojjetu chat biraatti ce'e taanaan dhaabi
+        if (window.activeChatId !== chatId) return false;
+        
+        // Messages dhaggeeffadhu
+        if (typeof window.listenToChatMessages === "function") {
+            window.listenToChatMessages(chatId);
+        }
+        
+        return true;
+        
+    } catch (error) {
+        console.error("[ORO-MESSAGE] Chat start error:", error);
+        return false;
     }
 };
 let chatUsersUnsubscribe = null;
@@ -25395,12 +26347,12 @@ window.openListModal = async (userId, type) => {
     const defaultAvatar = "/assets/img/default-avatar.png";
     
     if (!modal || !container || !title) {
-        console.error("openListModal: Modal elements hin argamne.");
+        console.error("[ORO-LIST] Modal elements hin argamne.");
         return;
     }
     
     if (!database || !userId || !["followers", "following"].includes(type)) {
-        console.error("openListModal: Database, userId ykn type sirrii miti.");
+        console.error("[ORO-LIST] Database, userId ykn type sirrii miti.");
         container.textContent = "Daataa banachuu hin dandeenye.";
         modal.style.display = "flex";
         return;
@@ -25414,8 +26366,9 @@ window.openListModal = async (userId, type) => {
     modal.style.display = "flex";
     
     try {
-        // Follow data users/{userId} document keessa jira.
-        const profileSnap = await getDoc(doc(database, "users", userId));
+        const profileSnap = await getDoc(
+            doc(database, "users", userId)
+        );
         
         if (!profileSnap.exists()) {
             container.textContent = "Piroofaayiliin fayyadamaa hin argamne.";
@@ -25423,24 +26376,40 @@ window.openListModal = async (userId, type) => {
         }
         
         const profile = profileSnap.data() || {};
-        let ids = profile[type];
         
-        // Maqaa field durii yoo fayyadame deeggara.
-        if (!Array.isArray(ids)) {
-            const legacyKey = type === "followers" ? "Followers" : "Following";
-            ids = profile[legacyKey];
+        // 1. Subcollection yeroo hunda dursa qaba.
+        const relationshipSnap = await getDocs(
+            collection(database, "users", userId, type)
+        );
+        
+        let ids = relationshipSnap.docs.map(d => d.id);
+        
+        console.log("[ORO-LIST] Type:", type);
+        console.log("[ORO-LIST] Subcollection size:", relationshipSnap.size);
+        console.log("[ORO-LIST] IDs:", ids);
+        
+        // 2. Subcollection duwwaa yoo ta'e array durii fayyadami.
+        if (ids.length === 0) {
+            const legacyKey = type === "followers" ?
+                "Followers" :
+                "Following";
+            
+            const legacyIds = Array.isArray(profile[type]) ?
+                profile[type] :
+                Array.isArray(profile[legacyKey]) ?
+                profile[legacyKey] :
+                [];
+            
+            ids = legacyIds;
         }
         
-        // Array hin jirre qofaaf subcollection durii ilaala.
-        if (!Array.isArray(ids)) {
-            const oldSnap = await getDocs(
-                collection(database, "users", userId, type)
-            );
-            ids = oldSnap.docs.map(d => d.id);
-        }
-        
+        // 3. UID irra deddeebi'ame qulqulleessi.
         ids = [...new Set(
-            ids.filter(id => typeof id === "string" && id.trim() && id !== userId)
+            ids.filter(id =>
+                typeof id === "string" &&
+                id.trim() &&
+                id !== userId
+            )
         )];
         
         if (!ids.length) {
@@ -25450,10 +26419,16 @@ window.openListModal = async (userId, type) => {
         
         container.replaceChildren();
         
+        // 4. Piroofaayilii namoota hunda fidi.
         const results = await Promise.allSettled(
             ids.map(async id => {
-                const snap = await getDoc(doc(database, "users", id));
-                return snap.exists() ? { id, data: snap.data() || {} } : null;
+                const snap = await getDoc(
+                    doc(database, "users", id)
+                );
+                
+                return snap.exists() ?
+                    { id, data: snap.data() || {} } :
+                    null;
             })
         );
         
@@ -25462,12 +26437,16 @@ window.openListModal = async (userId, type) => {
         results.forEach(result => {
             if (result.status !== "fulfilled" || !result.value) {
                 if (result.status === "rejected") {
-                    console.warn("Piroofaayilii dubbisuu hin dandeenye:", result.reason);
+                    console.warn(
+                        "[ORO-LIST] Profile fetch error:",
+                        result.reason
+                    );
                 }
                 return;
             }
             
             const { id, data: u } = result.value;
+            
             const item = document.createElement("button");
             const img = document.createElement("img");
             const info = document.createElement("div");
@@ -25475,27 +26454,39 @@ window.openListModal = async (userId, type) => {
             const handle = document.createElement("div");
             
             item.type = "button";
-            item.style.cssText =
-                "display:flex;align-items:center;gap:12px;width:100%;padding:12px;" +
-                "border:0;border-bottom:1px solid var(--bd,#eee);background:transparent;" +
-                "color:inherit;text-align:left;cursor:pointer;";
             
-            img.src = u.userPic || u.profilePic || u.photoURL ||
-                u.photo || defaultAvatar;
+            item.style.cssText =
+                "display:flex;align-items:center;gap:12px;width:100%;" +
+                "padding:12px;border:0;border-bottom:1px solid var(--bd,#eee);" +
+                "background:transparent;color:inherit;text-align:left;cursor:pointer;";
+            
+            img.src = u.userPic || u.profilePic ||
+                u.photoURL || u.photo || defaultAvatar;
+            
             img.alt = "";
             img.loading = "lazy";
+            
             img.style.cssText =
-                "width:44px;height:44px;flex-shrink:0;border-radius:50%;object-fit:cover;";
+                "width:44px;height:44px;flex-shrink:0;" +
+                "border-radius:50%;object-fit:cover;";
+            
             img.onerror = () => {
                 img.onerror = null;
                 img.src = defaultAvatar;
             };
             
-            name.textContent = u.userName || u.displayName || u.name || "Fayyadamaa";
-            name.style.cssText = "font-weight:600;overflow-wrap:anywhere;";
+            name.textContent =
+                u.userName || u.displayName || u.name || "Fayyadamaa";
             
-            handle.textContent = u.username ? "@" + u.username : "";
-            handle.style.cssText = "font-size:12px;color:var(--m,#777);margin-top:3px;";
+            name.style.cssText =
+                "font-weight:600;overflow-wrap:anywhere;";
+            
+            handle.textContent = u.username ?
+                "@" + u.username :
+                "";
+            
+            handle.style.cssText =
+                "font-size:12px;color:var(--m,#777);margin-top:3px;";
             
             info.append(name, handle);
             item.append(img, info);
@@ -25506,7 +26497,7 @@ window.openListModal = async (userId, type) => {
                 if (typeof window.openUserProfile === "function") {
                     window.openUserProfile(id);
                 } else {
-                    console.error("window.openUserProfile hin argamne.");
+                    console.error("[ORO-LIST] openUserProfile hin argamne.");
                 }
             });
             
@@ -25516,15 +26507,18 @@ window.openListModal = async (userId, type) => {
         
         if (!count) {
             container.textContent =
-                "Fayyadamaa tarree kana keessatti argamu hin jiru ykn piroofaayiliin isaanii hin banamne.";
+                "Piroofaayiliin namoota tarree kanaa hin argamne.";
         }
         
-    } catch (error) {
-        console.error("openListModal error:", error?.code, error?.message, error);
+        console.log("[ORO-LIST] Namoota agarsiifaman:", count);
         
-        container.textContent = error?.code === "permission-denied" ?
+    } catch (error) {
+        console.error("[ORO-LIST] Error:", error);
+        
+        container.textContent =
+            error?.code === "permission-denied" ?
             "Hayyamni Firestore hin jiru. Security Rules ilaali." :
-            "Daataa fiduun hin danda'amne. Internet, Firebase fi console ilaali.";
+            "Daataa fiduun hin danda'amne. Irra deebi'i yaali.";
     }
 };
 window.addEventListener('click', function() {
@@ -26756,6 +27750,40 @@ window.loadUsers = () => {
     }
     let usersQueryInitiated = false;
     let cachedUsersSnap = [];
+    // ==========================================
+// REALTIME FOLLOWING SUBCOLLECTION
+// ==========================================
+
+if (typeof window.followingUnsubscribe === "function") {
+    window.followingUnsubscribe();
+    window.followingUnsubscribe = null;
+}
+
+window.followingUnsubscribe = onSnapshot(
+    collection(db, "users", currentUserId, "following"),
+
+    (snap) => {
+        myFollowing = snap.docs.map(d => d.id);
+
+        console.log(
+            "[ORO-FOLLOW] Following updated:",
+            myFollowing.length
+        );
+
+        updateUsersUI();
+
+        if (typeof window.loadSuggestions === "function") {
+            window.loadSuggestions(myFollowing, blockedIds);
+        }
+    },
+
+    (error) => {
+        console.error(
+            "[ORO-FOLLOW] Following listener error:",
+            error
+        );
+    }
+);
     function updateUsersUI() {
         if (!cachedUsersSnap || cachedUsersSnap.length === 0) {
             userList.innerHTML = "<p style='text-align:center; padding:20px; font-size:13px; color:gray;'>Namni biraa hin argamne.</p>";
@@ -26771,8 +27799,7 @@ window.loadUsers = () => {
             if (realUid !== currentUserId && !blockedIds.has(realUid)) {
                 const realName = u.displayName || u.userName || u.name || "Fayyadamaa ORO";
                 const realPhoto = u.photo || u.photoURL || u.userPic || 'assets/img/default-profile.png';
-                const followersArray = Array.isArray(u.followers) ? u.followers : [];
-                const isFollowing = myFollowing.includes(realUid) || followersArray.includes(currentUserId);
+                const isFollowing = myFollowing.includes(realUid);
                 
                 const btnText = isFollowing ? "Hordofaa Jirta" : "Hordofi";
                 const btnClass = isFollowing ? "follow-btn following" : "follow-btn";
@@ -26822,8 +27849,6 @@ window.loadUsers = () => {
             const myData = myDoc.data();
             window.currentUserData = window.currentUserData || {};
             window.currentUserData.blockedUsers = myData.blockedUsers || [];
-            myFollowing = Array.isArray(myData.following) ? myData.following : [];
-            
             (myData.blockedUsers || []).forEach(id => blockedIds.add(id));
             (myData.blockedBy || []).forEach(id => blockedIds.add(id));
         }
@@ -30255,101 +31280,146 @@ window.initChatListener=chatId=>{if(!chatId)return;onSnapshot(doc(db,"chats",cha
 window.generateVideoThumbnail=file=>new Promise((resolve,reject)=>{const video=document.createElement("video"),canvas=document.createElement("canvas"),url=URL.createObjectURL(file),timeout=setTimeout(()=>{URL.revokeObjectURL(url);reject("Thumbnail uumuun hin danda'amne (Timeout)");},5000);video.src=url;video.preload="metadata";video.muted=true;video.playsInline=true;video.onloadeddata=()=>video.currentTime=1;video.onseeked=()=>{clearTimeout(timeout);canvas.width=video.videoWidth/4;canvas.height=video.videoHeight/4;canvas.getContext("2d").drawImage(video,0,0,canvas.width,canvas.height);canvas.toBlob(blob=>{URL.revokeObjectURL(url);blob?resolve(blob):reject("Thumbnail hin uumamne.");},"image/jpeg",.7);};video.onerror=()=>{clearTimeout(timeout);URL.revokeObjectURL(url);reject("Video hin dubbifamne.");};});
 
 
-window.toggleFollow = async (targetUid, btn) => {
-    const user = auth.currentUser;
+/* ==========================================
+   ORO-CONNECT FOLLOW / UNFOLLOW
+   FIRESTORE SUBCOLLECTION VERSION
+========================================== */
+
+window.toggleFollow = async (targetUid, button = null) => {
     
-    if (!user) {
-        alert("Dura seenuu (Login) qabdu!");
-        return;
+    const currentUid = auth.currentUser?.uid;
+    
+    if (!currentUid || !targetUid) {
+        console.error("[ORO-FOLLOW] UID hin argamne.");
+        return false;
     }
     
-    const myUid = user.uid;
-    
-    if (!targetUid || targetUid === myUid) {
-        alert("Ofii kee hordofuu hin dandeessu!");
-        return;
+    if (currentUid === targetUid) {
+        window.showToast?.("Ofii kee hordofuu hin dandeessu.");
+        return false;
     }
     
-    if (btn?.dataset.loading === "true") return;
+    if (button?.disabled) return false;
     
-    if (btn) {
-        btn.dataset.loading = "true";
-        btn.disabled = true;
+    if (button) {
+        button.disabled = true;
+        button.textContent = "Sakaalamaa... ⏳";
     }
+    
+    const targetUserRef = doc(db, "users", targetUid);
+    
+    const followerRef = doc(
+        db,
+        "users",
+        targetUid,
+        "followers",
+        currentUid
+    );
+    
+    const followingRef = doc(
+        db,
+        "users",
+        currentUid,
+        "following",
+        targetUid
+    );
     
     try {
-        const myRef = doc(db, "users", myUid);
-        const targetRef = doc(db, "users", targetUid);
         
-        const [mine, target] = await Promise.all([
-            getDoc(myRef),
-            getDoc(targetRef)
-        ]);
-        
-        if (!mine.exists() || !target.exists()) {
-            throw new Error("Piroofaayiliin fayyadamaa hin argamne.");
-        }
-        
-        const myData = mine.data() || {};
-        const targetData = target.data() || {};
-        
-        const blocked = Array.isArray(myData.blockedUsers) ?
-            myData.blockedUsers : [];
-        
-        const blockedBy = Array.isArray(myData.blockedBy) ?
-            myData.blockedBy : [];
-        
-        if (
-            blocked.includes(targetUid) ||
-            blockedBy.includes(targetUid)
-        ) {
-            alert("Fayyadamaa dhorkame hordofuu hin dandeessu.");
-            return;
-        }
-        
-        // Follow document ilaali
-        const followerRef = doc(
-            db, "users", targetUid, "followers", myUid
-        );
-        
-        const followerSnap = await getDoc(followerRef);
-        
-        const isFollowing = followerSnap.exists();
-        
-        // Function haaraa fayyadami
-        await toggleFollowSystem(targetUid, !isFollowing);
-        
-        // Button UI jijjiiri
-        if (btn) {
-            if (isFollowing) {
-                btn.textContent = "Hordofi";
-                btn.classList.remove("following");
-                btn.style.background = "white";
-                btn.style.color = "#00b894";
-            } else {
-                btn.textContent = "Hordofaa Jirta";
-                btn.classList.add("following");
-                btn.style.background = "#00b894";
-                btn.style.color = "white";
+        const result = await runTransaction(db, async transaction => {
+            
+            const [targetSnap, followerSnap, followingSnap] =
+            await Promise.all([
+                transaction.get(targetUserRef),
+                transaction.get(followerRef),
+                transaction.get(followingRef)
+            ]);
+            
+            if (!targetSnap.exists()) {
+                throw new Error("Fayyadamaan kun hin argamne.");
             }
+            
+            const alreadyFollowing =
+                followerSnap.exists() || followingSnap.exists();
+            
+            if (alreadyFollowing) {
+                
+                if (followerSnap.exists()) {
+                    transaction.delete(followerRef);
+                }
+                
+                if (followingSnap.exists()) {
+                    transaction.delete(followingRef);
+                }
+                
+                return false;
+            }
+            
+            transaction.set(followerRef, {
+                uid: currentUid,
+                createdAt: serverTimestamp()
+            });
+            
+            transaction.set(followingRef, {
+                uid: targetUid,
+                createdAt: serverTimestamp()
+            });
+            
+            return true;
+        });
+        
+        console.log(
+            "[ORO-FOLLOW] Success:",
+            result ? "FOLLOWED" : "UNFOLLOWED"
+        );
+        
+        if (button) {
+            button.textContent = result ?
+                "Hordofaa Jirta ✔️" :
+                "Hordofi ➕";
+            
+            button.classList.toggle("following", result);
         }
         
-        console.log("[ORO-FOLLOW] Follow state updated.");
+        if (typeof window.loadUsers === "function") {
+            // UI haaromsuuf
+            window.loadUsers();
+        }
         
-    } catch (e) {
-        console.error("[ORO-FOLLOW] Error:", e);
-        
-        alert(
-            "Hordoffii irratti dogoggorri uumame: " +
-            (e.code || e.message || e)
+        window.showToast?.(
+            result ?
+            "Fayyadamaa kana hordofuu jalqabde." :
+            "Hordoffii dhaabde."
         );
+        
+        return result;
+        
+    } catch (error) {
+        
+        console.error("[ORO-FOLLOW] Error:", error);
+        
+        window.showToast?.(
+            error.code === "permission-denied" ?
+            "Hayyamni Follow gochuuf hin jiru. Firestore Rules ilaali." :
+            "Follow gochuun hin milkoofne. Irra deebi'i yaali."
+        );
+        
+        return false;
         
     } finally {
-        if (btn) {
-            delete btn.dataset.loading;
-            btn.disabled = false;
+        
+        if (button) {
+            button.disabled = false;
         }
+        
     }
+};
+
+
+/* OLD FUNCTION COMPATIBILITY */
+
+window.followUser = async (targetUid) => {
+    return window.toggleFollow(targetUid);
 };
 window.deleteMessage = async (chatId, messageId) => {
     if (!chatId || !messageId || !auth.currentUser) {
@@ -30405,6 +31475,69 @@ window.deleteMessage = async (chatId, messageId) => {
             "Ergaa haquun hin danda'amne."
         );
         
+        return false;
+    }
+};
+window.editMessage = async (chatId, messageId) => {
+    const user = auth.currentUser;
+
+    if (!user || !chatId || !messageId) return false;
+
+    const messageRef = doc(
+        db,
+        "chats",
+        chatId,
+        "messages",
+        messageId
+    );
+
+    try {
+        const snap = await getDoc(messageRef);
+
+        if (!snap.exists()) return false;
+
+        const data = snap.data();
+
+        if (
+            data.senderId !== user.uid ||
+            data.type !== "text"
+        ) {
+            alert("Ergaa barruu ati erge qofa gulaaluu dandeessa.");
+            return false;
+        }
+
+        const nextText = prompt(
+            "Ergaa kee gulaali:",
+            data.text || ""
+        );
+
+        if (nextText === null) return false;
+
+        const cleanText = String(nextText).trim();
+
+        if (!cleanText || cleanText.length > 5000) {
+            alert("Ergaan qubee 1 hanga 5000 ta'uu qaba.");
+            return false;
+        }
+
+        if (cleanText === data.text) return true;
+
+        await updateDoc(messageRef, {
+            text: cleanText,
+            updatedAt: serverTimestamp()
+        });
+
+        return true;
+
+    } catch (error) {
+        console.error("[ORO-MESSAGE] Edit failed:", error);
+
+        alert(
+            error.code === "permission-denied"
+                ? "Ergaa kana gulaaluuf hayyamni hin jiru."
+                : "Ergaa gulaaluun hin milkoofne."
+        );
+
         return false;
     }
 };
@@ -30578,11 +31711,12 @@ window.loadMessages = function (targetUid, targetName) {
                 // Check voice before text because voice
                 // messages also contain a text label.
                 if (
-                    message.type === "voice" ||
-                    (
-                        message.audioUrl &&
-                        !message.type
-                    )
+    message.type === "voice" ||
+    message.type === "audio" ||
+    (
+        message.audioUrl &&
+        !message.type
+    )
                 ) {
 
                     if (mediaUrl) {
@@ -30670,7 +31804,11 @@ window.loadMessages = function (targetUid, targetName) {
                 }
 
                 // 4. OTHER MEDIA URL
-                else if (mediaUrl && message.type !== "voice") {
+               else if (
+    mediaUrl &&
+    message.type !== "voice" &&
+    message.type !== "audio"
+) {
 
                     content = `
                         <a
@@ -30873,14 +32011,205 @@ window.submitReport=async(postId=null,postText=null)=>{const field=document.getE
 
 window.deleteReportedPost=async(postId,reportId)=>{if(!confirm("Postii kana balleessuu ni barbaaddaa? (Admin qofaf)"))return;try{await deleteDoc(doc(db,"posts",postId));await updateDoc(doc(db,"reports",reportId),{status:"resolved",action:"deleted",deletedAt:new Date().toISOString()});document.getElementById(`post-${postId}`)?.remove();alert("Postiin sun fi gabaasni isaa milkiidhaan qophaa'eera!");}catch(e){console.error("Error deleting post:",e);alert(e.code==="permission-denied"?"Heyyama gahaa hin qabdu (Admin qofa).":"Hojichi hin milkoofne. Network kee mirkaneessi.");}};
 
-const functionsInstance=getFunctions(app),initializeChapaPayment=httpsCallable(functionsInstance,"initializeChapaPayment"),verifyUserPayment=httpsCallable(functionsInstance,"verifyUserPayment"); 
+// ============================================
+// ORO-CONNECT PREMIUM PAYMENT
+// CHAPA + FIREBASE
+// ============================================
 
-async function processPayment(){const user=auth.currentUser;if(!user)return alert("Maaloo, dursa fuula keetti seeni (Login)!");try{const method=document.getElementById("payment-method")?.value||"telebirr";alert(`${method.toUpperCase()}n kaffaluuf gara Chapaatti si furaa jirra...`);const res=await initializeChapaPayment({amount:"150",email:user.email||"fayyadamaa@oro.com",firstName:user.displayName||"Fayyadamaa",selectedMethod:method});if(res.data?.status==="success"&&res.data.data?.checkout_url)location.href=res.data.data.checkout_url;else alert("Kaffaltii jalqabsiisuun hin danda'amne.");}catch(e){console.error("Payment Error:",e);alert("Kaffaltii irratti rakkoon uumame: "+e.message);}}
+const initializeChapaPayment = httpsCallable(
+    functionsInstance,
+    "initializeChapaPayment"
+);
 
-async function checkUrlForPaymentStatus(){const params=new URLSearchParams(location.search),status=params.get("status"),txRef=params.get("tx_ref");if(status!=="success"||!txRef)return;alert("Kaffaltii kee mirkaneessaa jirra, maaloo hamma sekondi muraasa eegi...");try{const res=await verifyUserPayment({txRef});if(res.data.status==="success"){alert("Kaffaltiin kee argameera! Amma ati miseensa Premium dha.");location.href="/";}else alert("Kaffaltii kee mirkaneessuu hin dandeenye.");}catch(e){console.error(e);alert("Mirkaneessuu irratti rakkoon uumame.");}}
+const verifyUserPayment = httpsCallable(
+    functionsInstance,
+    "verifyUserPayment"
+);
+
+let premiumPaymentInProgress = false;
+
+const ORO_PREMIUM_AMOUNT = 30;
+
+
+// ============================================
+// START PREMIUM PAYMENT
+// ============================================
+
+window.startPremiumPayment = async function () {
+
+    if (premiumPaymentInProgress) {
+        return;
+    }
+
+    const user = auth.currentUser;
+
+    if (!user) {
+        alert("Maaloo, dura account keessan seenaa.");
+        return;
+    }
+
+    try {
+
+        premiumPaymentInProgress = true;
+
+        const method =
+            document.getElementById("payment-method")?.value ||
+            "telebirr";
+
+        const button = document.querySelector(
+            ".premium-card button"
+        );
+
+        if (button) {
+            button.disabled = true;
+            button.textContent = "Kaffaltii qopheessaa...";
+        }
+
+        const result = await initializeChapaPayment({
+
+            amount: ORO_PREMIUM_AMOUNT,
+
+            currency: "ETB",
+
+            email: user.email || "",
+
+            firstName:
+                user.displayName || "ORO User",
+
+            selectedMethod: method,
+
+            plan: "premium_monthly"
+
+        });
+
+        const paymentData = result.data;
+
+        if (
+            paymentData?.status === "success" &&
+            paymentData?.data?.checkout_url
+        ) {
+
+            window.location.assign(
+                paymentData.data.checkout_url
+            );
+
+            return;
+        }
+
+        throw new Error(
+            paymentData?.message ||
+            "Kaffaltii jalqabsiisuun hin danda'amne."
+        );
+
+    } catch (error) {
+
+        console.error(
+            "[ORO-PREMIUM] Payment initialization failed:",
+            error
+        );
+
+        alert(
+            "Kaffaltii irratti rakkoon uumame: " +
+            (error.message || "Dogoggora hin beekamne.")
+        );
+
+    } finally {
+
+        premiumPaymentInProgress = false;
+
+        const button = document.querySelector(
+            ".premium-card button"
+        );
+
+        if (button) {
+            button.disabled = false;
+            button.textContent = "Amma Premium Ta'i";
+        }
+    }
+};
+
+
+// ============================================
+// VERIFY PAYMENT AFTER CHAPA REDIRECT
+// ============================================
+
+async function checkUrlForPaymentStatus() {
+
+    const params = new URLSearchParams(
+        window.location.search
+    );
+
+    const txRef = params.get("tx_ref");
+
+    if (!txRef) {
+        return;
+    }
+
+    const user = auth.currentUser;
+
+    if (!user) {
+        alert(
+            "Kaffaltii mirkaneessuuf account keessan seenaa."
+        );
+        return;
+    }
+
+    try {
+
+        alert(
+            "Kaffaltii keessan mirkaneessaa jirra. Maaloo eeggadhaa."
+        );
+
+        const result = await verifyUserPayment({
+            txRef: txRef
+        });
+
+        if (result.data?.status === "success") {
+
+            alert(
+                "Kaffaltiin keessan mirkanaa'eera. " +
+                "Baga gara ORO-CONNECT Premium dhuftan!"
+            );
+
+            window.history.replaceState(
+                {},
+                document.title,
+                window.location.pathname
+            );
+
+            window.location.reload();
+
+            return;
+        }
+
+        alert(
+            "Kaffaltiin hin mirkanoofne. Maaloo irra deebi'aa."
+        );
+
+    } catch (error) {
+
+        console.error(
+            "[ORO-PREMIUM] Verification failed:",
+            error
+        );
+
+        alert(
+            "Kaffaltii mirkaneessuu irratti rakkoon uumame."
+        );
+    }
+}
 
 document.addEventListener("DOMContentLoaded",()=>{document.getElementById("pay-button")?.addEventListener("click",processPayment);checkUrlForPaymentStatus();});
+// ORO PREMIUM PAYMENT — GLOBAL FUNCTION
+window.startPremiumPayment = async function () {
+    if (typeof processPayment !== "function") {
+        console.error("[ORO-PREMIUM] processPayment hin argamne.");
+        alert("Sirni kaffaltii amma hin qophoofne.");
+        return false;
+    }
 
+    return await processPayment();
+};
 // ==========================================
 // ORO SETTINGS — REALTIME UPDATE
 // ==========================================
