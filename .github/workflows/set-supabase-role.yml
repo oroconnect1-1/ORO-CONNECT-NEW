@@ -1,0 +1,104 @@
+name: Set Supabase Authentication Role
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  set-role:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Firebase Admin SDK
+        working-directory: functions
+        run: npm install --no-save --package-lock=false firebase-admin@14.5.1
+
+      - name: Set authenticated role for Firebase users
+        working-directory: functions
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          node <<'NODE'
+          const admin = require("firebase-admin");
+
+          async function main() {
+            const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
+
+            if (!raw) {
+              throw new Error("FIREBASE_SERVICE_ACCOUNT secret hin jiru.");
+            }
+
+            const serviceAccount = JSON.parse(raw);
+
+            if (serviceAccount.project_id !== "oro-connect-1f468") {
+              throw new Error("Firebase project ID sirrii miti.");
+            }
+
+            admin.initializeApp({
+              credential: admin.credential.cert(serviceAccount)
+            });
+
+            const auth = admin.auth();
+
+            let nextPageToken;
+            let updated = 0;
+            let skipped = 0;
+            let failed = 0;
+
+            do {
+              const result = await auth.listUsers(1000, nextPageToken);
+
+              for (const user of result.users) {
+                try {
+                  const claims = user.customClaims || {};
+
+                  if (claims.role === "authenticated") {
+                    skipped++;
+                    continue;
+                  }
+
+                  await auth.setCustomUserClaims(user.uid, {
+                    ...claims,
+                    role: "authenticated"
+                  });
+
+                  updated++;
+                } catch (error) {
+                  failed++;
+                  console.error(
+                    "User tokko irratti hojii hin milkoofne:",
+                    error.code || error.message
+                  );
+                }
+              }
+
+              nextPageToken = result.pageToken;
+            } while (nextPageToken);
+
+            console.log("================================");
+            console.log("Supabase role update xumurame.");
+            console.log("Updated:", updated);
+            console.log("Already configured:", skipped);
+            console.log("Failed:", failed);
+            console.log("================================");
+
+            if (failed > 0) {
+              process.exitCode = 1;
+            }
+          }
+
+          main().catch(error => {
+            console.error("Workflow failed:", error.message);
+            process.exitCode = 1;
+          });
+          NODE
