@@ -1,6 +1,6 @@
 {
   "functions": {
-    "source": "functions"
+    "source": "firebase-functions"
   },
   "firestore": {
     "rules": "firestore.rules",
@@ -19,7 +19,7 @@
       "package.json",
       "AndroidManifest.xml",
       "cors.json",
-      "functions/**",
+      "firebase-functions/**",
       "android/**",
       "**/.*",
       "**/node_modules/**"
