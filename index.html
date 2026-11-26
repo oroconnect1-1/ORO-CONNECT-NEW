@@ -5044,7 +5044,75 @@ textarea:focus {
   border: 2px solid var(--card-bg) !important;
   box-shadow: var(--shadow-sm) !important;
 }
+/* ORO-CONNECT NOTIFICATION BADGE */
 
+.oro-notification-nav {
+    position: relative;
+}
+
+.oro-notification-icon {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+}
+
+.oro-notification-badge {
+    position: absolute;
+    top: -9px;
+    right: -12px;
+
+    min-width: 19px;
+    height: 19px;
+
+    padding: 0 5px;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    background: #e60023;
+    color: #fff;
+
+    border: 2px solid #0d1117;
+    border-radius: 999px;
+
+    font-size: 10px;
+    font-weight: 800;
+
+    line-height: 1;
+    white-space: nowrap;
+
+    box-shadow: 0 2px 8px rgba(230,0,35,.3);
+}
+
+.notif-item {
+    transition:
+        background .2s ease,
+        transform .2s ease;
+}
+
+.notif-item:active {
+    transform: scale(.99);
+}
+
+.notif-unread {
+    background: rgba(24,119,242,.08) !important;
+}
+
+#notifications-container {
+    width: 100%;
+    min-width: 0;
+}
+
+#notifications-container:empty::after {
+    content: "Beeksisni hin jiru.";
+    display: block;
+    padding: 25px;
+    text-align: center;
+    color: var(--text-muted);
+}
 </style>
 </head>
 <body>
@@ -5386,9 +5454,25 @@ textarea:focus {
             📧 <span data-i18n="messages">MESSAGING</span>
         </div>
 
-        <div class="nav-item" onclick="switchSection('notifications', event)">
-            🔔 <span data-i18n="notifications">ACTIVITY</span>
-        </div>
+        <div
+    class="nav-item oro-notification-nav"
+    onclick="switchSection('notifications', event)"
+    aria-label="Notifications">
+
+    <span class="oro-notification-icon">
+        🔔
+        <span
+            id="notification-badge"
+            class="oro-notification-badge"
+            style="display:none;">
+        </span>
+    </span>
+
+    <span data-i18n="notifications">
+        ACTIVITY
+    </span>
+
+</div>
 
         <div class="nav-item" onclick="switchSection('calls', event)">
             📞 <span data-i18n="calls">CALLS</span>
@@ -6171,37 +6255,154 @@ textarea:focus {
                 id="mark-notifications-seen-btn"
                 data-i18n="notifications_mark_all_seen"
                 onclick="if(typeof window.markNotificationsAsSeen==='function'){window.markNotificationsAsSeen();}">
+
                 Hunda dubbisi
+
             </button>
 
         </h3>
 
-        <!-- Enable Push Notifications -->
+
+        <!-- ENABLE PUSH NOTIFICATIONS -->
+
         <div id="notification-permission-area">
 
             <button
                 type="button"
                 id="enable-oro-notifications-btn"
                 onclick="window.enableORONotifications()">
+
                 🔔 Notification Bani
+
             </button>
 
         </div>
 
-        <!-- Notifications List -->
+
+        <!-- NOTIFICATION SETTINGS -->
+
+        <div class="oro-notification-settings">
+
+            <h4>⚙️ Notification Settings</h4>
+
+            <label class="switch-label">
+                Likes
+                <input type="checkbox" id="notif-likes" checked>
+            </label>
+
+            <label class="switch-label">
+                Comments
+                <input type="checkbox" id="notif-comments" checked>
+            </label>
+
+            <label class="switch-label">
+                Messages
+                <input type="checkbox" id="notif-messages" checked>
+            </label>
+
+            <label class="switch-label">
+                Calls
+                <input type="checkbox" id="notif-calls" checked>
+            </label>
+
+            <label class="switch-label">
+                Mentions
+                <input type="checkbox" id="notif-mentions" checked>
+            </label>
+
+            <label class="switch-label">
+                Shares
+                <input type="checkbox" id="notif-shares" checked>
+            </label>
+
+            <label class="switch-label">
+                Push Notifications
+                <input type="checkbox" id="notif-push" checked>
+            </label>
+
+            <label class="switch-label">
+                Notification Sound
+                <input type="checkbox" id="notif-sound" checked>
+            </label>
+
+
+            <hr>
+
+
+            <!-- DO NOT DISTURB -->
+
+            <h4>🌙 Do Not Disturb</h4>
+
+            <label class="switch-label">
+
+                Enable Do Not Disturb
+
+                <input
+                    type="checkbox"
+                    id="notif-dnd">
+
+            </label>
+
+
+            <label for="notif-dnd-start">
+                Start Time
+            </label>
+
+            <input
+                type="time"
+                id="notif-dnd-start"
+                value="22:00">
+
+
+            <label for="notif-dnd-end">
+                End Time
+            </label>
+
+            <input
+                type="time"
+                id="notif-dnd-end"
+                value="07:00">
+
+
+            <!-- SAVE SETTINGS -->
+
+            <button
+                type="button"
+                class="btn-main"
+                id="save-notification-settings">
+
+                💾 Save Notification Settings
+
+            </button>
+
+
+            <p
+                id="notification-settings-status"
+                role="status"
+                aria-live="polite">
+            </p>
+
+        </div>
+
+
+        <!-- NOTIFICATIONS LIST -->
+
         <div
             id="notifications-container"
             aria-live="polite"
             aria-busy="true">
 
             <div data-i18n="notifications_loading">
+
                 Beeksisa fe'aa jira...
+
             </div>
 
         </div>
-    </div>
-</div>
 
+    </div>
+
+</div>
 
 <div id="calls-section" class="page-section">
 
@@ -8171,18 +8372,58 @@ console.info(
 
         const firebase = getFirebase();
 
-        const user =
-            firebase.auth?.currentUser ||
-            window.currentUser;
+        let user =
+    firebase.auth?.currentUser ||
+    window.currentUser;
 
-        if (!user) {
-
-            throw createError(
-                "Maaloo dura ORO-CONNECT keessa seeni.",
-                "AUTH_REQUIRED"
+/* Wait for Firebase initial auth resolution */
+if (
+    !user &&
+    firebase.auth &&
+    typeof(
+        firebase.app.onAuthStateChanged ||
+        firebase.methods.onAuthStateChanged
+    ) === "function"
+) {
+    const onAuthStateChanged =
+        firebase.app.onAuthStateChanged ||
+        firebase.methods.onAuthStateChanged;
+    
+    user = await new Promise((resolve, reject) => {
+        let unsubscribe = null;
+        
+        const timeout = setTimeout(() => {
+            unsubscribe?.();
+            reject(
+                createError(
+                    "Firebase Authentication yeroo eegame keessatti hin xumuramne.",
+                    "AUTH_TIMEOUT"
+                )
             );
+        }, 12000);
+        
+        unsubscribe = onAuthStateChanged(
+            firebase.auth,
+            authenticatedUser => {
+                clearTimeout(timeout);
+                unsubscribe?.();
+                resolve(authenticatedUser || null);
+            },
+            error => {
+                clearTimeout(timeout);
+                unsubscribe?.();
+                reject(error);
+            }
+        );
+    });
+}
 
-        }
+if (!user) {
+    throw createError(
+        "Maaloo dura ORO-CONNECT keessa seeni.",
+        "AUTH_REQUIRED"
+    );
+}
 
         if (
             typeof user.getIdTokenResult !== "function" ||
@@ -14845,7 +15086,18 @@ if (!window.ORONetwork) {
             }
 
         });
+// Video dhaabbate yeroo network quality haaromsuu.
+video.addEventListener("pause", () => {
 
+    if (video.dataset.oroPendingQuality) {
+
+        delete video.dataset.oroPendingQuality;
+
+        optimizeOROVideo(video);
+
+    }
+
+});
     }
 
 
@@ -15069,19 +15321,123 @@ if (!window.ORONetwork) {
         );
     }
 
+/* =====================================================
+   ORO-CONNECT — OFFLINE STATUS MONITOR
+===================================================== */
 
-    /* NETWORK EVENTS */
+(function setupOROOfflineMonitor() {
+    let offlineNoticeShown = false;
 
-    window.addEventListener("online", updateNetwork);
+    function checkConnection() {
+        if (!navigator.onLine) {
+            window.ORO_NETWORK_STATE = {
+                ...(window.ORO_NETWORK_STATE || {}),
+                online: false
+            };
 
-    window.addEventListener("offline", updateNetwork);
+            if (!offlineNoticeShown) {
+                offlineNoticeShown = true;
 
-    oroConnection?.addEventListener(
-        "change",
-        updateNetwork
+                window.dispatchEvent(
+                    new CustomEvent("oro:offline")
+                );
+            }
+
+            return;
+        }
+
+        if (offlineNoticeShown) {
+            offlineNoticeShown = false;
+
+            if (typeof updateNetwork === "function") {
+                updateNetwork();
+            }
+
+            window.dispatchEvent(
+                new CustomEvent("oro:online")
+            );
+        }
+    }
+
+    window.addEventListener("offline", checkConnection);
+    window.addEventListener("online", checkConnection);
+
+    document.addEventListener(
+        "visibilitychange",
+        () => {
+            if (document.visibilityState === "visible") {
+                checkConnection();
+            }
+        }
     );
 
+    checkConnection();
+})();
+/* =====================================================
+   ORO-CONNECT — NETWORK STATUS EVENTS
+===================================================== */
 
+window.addEventListener("oro:offline", () => {
+    document.documentElement.dataset.oroConnection = "offline";
+
+    console.warn(
+        "ORO-CONNECT: Internet connection lost."
+    );
+});
+
+window.addEventListener("oro:online", () => {
+    document.documentElement.dataset.oroConnection = "online";
+
+    console.info(
+        "ORO-CONNECT: Internet connection restored."
+    );
+});
+  /* NETWORK EVENTS — RECOVERY */
+
+/* =====================================================
+   NETWORK EVENTS — RECOVERY & APP RESUME
+===================================================== */
+
+let oroNetworkUpdateTimer = null;
+
+function scheduleORONetworkUpdate() {
+    clearTimeout(oroNetworkUpdateTimer);
+    
+    oroNetworkUpdateTimer = setTimeout(() => {
+        updateNetwork();
+        
+        window.dispatchEvent(
+            new CustomEvent(
+                navigator.onLine ?
+                "oro:network-restored" :
+                "oro:network-lost"
+            )
+        );
+    }, 300);
+}
+
+/* Internet connection changes */
+window.addEventListener("online", scheduleORONetworkUpdate);
+window.addEventListener("offline", scheduleORONetworkUpdate);
+
+/* Network information changes */
+oroConnection?.addEventListener(
+    "change",
+    scheduleORONetworkUpdate
+);
+
+/* App returns from background */
+document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+        scheduleORONetworkUpdate();
+    }
+});
+
+/* Browser restores the page */
+window.addEventListener("pageshow", scheduleORONetworkUpdate);
+
+/* Browser window becomes active */
+window.addEventListener("focus", scheduleORONetworkUpdate);
     /* DOM READY */
 
     if (document.readyState === "loading") {
@@ -15118,6 +15474,47 @@ if (!window.ORONetwork) {
     });
 
 }
+/* ORO-CONNECT — VIDEO QUALITY SELECTION */
+
+window.getOROVideoSource = function (video) {
+
+    if (!video) return null;
+
+    const tier = window.getORONetworkTier();
+
+    let quality = "high";
+
+    if (
+        window.isORODataSaverActive() ||
+        tier === "low" ||
+        tier === "offline"
+    ) {
+        quality = "low";
+
+    } else if (tier === "medium") {
+        quality = "medium";
+    }
+
+    const source =
+        video.dataset[`src${quality.charAt(0).toUpperCase()}${quality.slice(1)}`];
+
+    return source || video.dataset.srcMedium ||
+           video.dataset.srcLow || null;
+};
+/* ORO-CONNECT — DATA SAVER CHECK */
+
+window.isORODataSaverActive = function () {
+
+    const connection =
+        navigator.connection ||
+        navigator.mozConnection ||
+        navigator.webkitConnection;
+
+    return (
+        localStorage.getItem("oro_data_saver") === "true" ||
+        connection?.saveData === true
+    );
+};
 /* ==========================================
    END ORO NETWORK OPTIMIZATION
 ========================================== */
@@ -18688,54 +19085,291 @@ window.loadShortVideos = function() {
         console.error("Short Videos Snapshot Error:", err);
     });
 };
-window.reactToPost = async (postId, reactionType) => {
-    try {
-        const user = auth.currentUser;
-        if (!user) return alert("Dura seenuu (login) qabda!");
-        const myUid = user.uid;
-        const postRef = doc(db, "posts", postId);
-        const reactionRef = doc(db, "posts", postId, "reactions", myUid);
-        await runTransaction(db, async (transaction) => {
-            const postSnap = await transaction.get(postRef);
-            const reactionSnap = await transaction.get(reactionRef);
-            if (!postSnap.exists()) {
-                throw "Ergaan kun hin jiru!";
-            }
-            const postData = postSnap.data();
-            const currentCounts = postData.reactionsCount || {};
-            let oldTypeCount = currentCounts[reactionType] || 0;
-            if (reactionSnap.exists()) {
-                const currentReaction = reactionSnap.data().type;
-                if (currentReaction === reactionType) {
-                    transaction.delete(reactionRef); currentCounts[reactionType] = Math.max(0, oldTypeCount - 1);
-                    console.log("Reaction removed");
-                } else {
-                    transaction.set(reactionRef, {
-                        type: reactionType,
-                        timestamp: serverTimestamp()
-                    }, { merge: true });
-                    let previousTypeCount = currentCounts[currentReaction] || 0;
-                    currentCounts[currentReaction] = Math.max(0, previousTypeCount - 1);
-                    currentCounts[reactionType] = oldTypeCount + 1;
-                    console.log(`Reaction updated from ${currentReaction} to: ${reactionType}`);
-                }
-            } else {
-                transaction.set(reactionRef, {
-                    type: reactionType,
-                    uid: myUid,
-                    timestamp: serverTimestamp()
-                });
-                currentCounts[reactionType] = oldTypeCount + 1;
-                if (postData.userId && postData.userId !== myUid && typeof window.sendNotification === "function") {
-                    window.sendNotification(postData.userId, `reaction_${reactionType}`, { postId });
-                }
-                console.log(`Reaction added: ${reactionType}`);
-            }
-            transaction.update(postRef, { reactionsCount: currentCounts });
-        });
-    } catch (error) {
-        console.error("Error reacting to post:", error);
-    }
+// ================================================
+// ORO-CONNECT — PRODUCTION REACTION ENGINE
+// FIRESTORE TRANSACTION + NOTIFICATION
+// ================================================
+
+window.reactToPost = async function(postId, reactionType) {
+
+const user = auth.currentUser;
+
+if (!user) {
+alert("Dura seenuu (login) qabda!");
+return false;
+}
+
+const myUid = user.uid;
+
+// --------------------------------------------
+// VALIDATION
+// --------------------------------------------
+
+postId = String(postId || "").trim();
+
+reactionType = String(reactionType || "")
+.trim()
+.toLowerCase();
+
+if (
+!postId ||
+postId.length > 200 ||
+!/^[a-z][a-z0-9_-]{0,29}$/.test(reactionType)
+) {
+console.warn("[ORO-REACTION] Invalid input.");
+return false;
+}
+
+const postRef = doc(db, "posts", postId);
+
+const reactionRef = doc(
+db,
+"posts",
+postId,
+"reactions",
+myUid
+);
+
+try {
+
+// ----------------------------------------
+// FIRESTORE TRANSACTION
+// ----------------------------------------
+
+const result = await runTransaction(
+db,
+async (transaction) => {
+
+const postSnap = await transaction.get(postRef);
+
+const reactionSnap = await transaction.get(
+reactionRef
+);
+
+if (!postSnap.exists()) {
+throw new Error("Postichi hin jiru.");
+}
+
+const postData = postSnap.data() || {};
+
+// Clone counts to avoid mutating snapshot data.
+const currentCounts = {
+...(postData.reactionsCount || {})
+};
+
+let notificationRequired = false;
+
+let previousReaction = null;
+
+let action = "added";
+
+// --------------------------------
+// EXISTING REACTION
+// --------------------------------
+
+if (reactionSnap.exists()) {
+
+const reactionData = reactionSnap.data() || {};
+
+previousReaction = String(
+reactionData.type || ""
+).toLowerCase();
+
+// SAME REACTION = REMOVE
+if (previousReaction === reactionType) {
+
+transaction.delete(reactionRef);
+
+currentCounts[reactionType] = Math.max(
+0,
+Number(currentCounts[reactionType] || 0) - 1
+);
+
+action = "removed";
+
+}
+
+// DIFFERENT REACTION = UPDATE
+else {
+
+if (
+previousReaction &&
+previousReaction !== reactionType
+) {
+
+currentCounts[previousReaction] = Math.max(
+0,
+Number(
+currentCounts[previousReaction] || 0
+) - 1
+);
+
+}
+
+currentCounts[reactionType] =
+Number(currentCounts[reactionType] || 0) + 1;
+
+transaction.set(
+reactionRef,
+{
+type: reactionType,
+uid: myUid,
+timestamp: serverTimestamp()
+},
+{ merge: true }
+);
+
+action = "updated";
+
+}
+
+}
+
+// --------------------------------
+// NEW REACTION
+// --------------------------------
+
+else {
+
+currentCounts[reactionType] =
+Number(currentCounts[reactionType] || 0) + 1;
+
+transaction.set(reactionRef, {
+
+type: reactionType,
+
+uid: myUid,
+
+timestamp: serverTimestamp()
+
+});
+
+notificationRequired = true;
+
+action = "added";
+
+}
+
+// --------------------------------
+// UPDATE POST COUNTS
+// --------------------------------
+
+transaction.update(postRef, {
+
+reactionsCount: currentCounts
+
+});
+
+// --------------------------------
+// RETURN TRANSACTION RESULT
+// --------------------------------
+
+return {
+
+action,
+
+notificationRequired,
+
+postOwnerId: String(
+postData.userId ||
+postData.uid ||
+postData.authorId ||
+""
+).trim()
+
+};
+
+}
+);
+
+
+// ----------------------------------------
+// AUTH VALIDATION AFTER TRANSACTION
+// ----------------------------------------
+
+if (auth.currentUser?.uid !== myUid) {
+return false;
+}
+
+
+console.log(
+"[ORO-REACTION]",
+result.action,
+reactionType
+);
+
+
+// ----------------------------------------
+// NOTIFICATION AFTER COMMIT
+// ----------------------------------------
+
+if (
+result.notificationRequired &&
+result.postOwnerId &&
+result.postOwnerId !== myUid &&
+typeof window.sendNotification === "function"
+) {
+
+try {
+
+await window.sendNotification(
+
+result.postOwnerId,
+
+`reaction_${reactionType}`,
+
+{
+postId: postId,
+reactionType: reactionType
+}
+
+);
+
+} catch (notificationError) {
+
+console.error(
+"[ORO-REACTION] Notification failed:",
+notificationError
+);
+
+}
+
+}
+
+return true;
+
+
+} catch (error) {
+
+console.error(
+"[ORO-REACTION] Transaction failed:",
+error
+);
+
+if (error.code === "permission-denied") {
+
+alert(
+"Hayyamni reaction hin jiru. Firestore Rules ilaali."
+);
+
+} else if (error.code === "unavailable") {
+
+alert(
+"Rakkoon network uumameera. Irra deebi'ii yaali."
+);
+
+} else {
+
+alert(
+"Reaction gochuun hin milkoofne."
+);
+
+}
+
+return false;
+
+}
+
 };
 function getVideoDuration(file) {
     return new Promise((resolve, reject) => {
@@ -20830,8 +21464,14 @@ document.addEventListener("DOMContentLoaded", () => {
         };
     }
 });
-console.log("🎤 VOICE DEBUG:", {
+/* ORO VOICE — POST INITIALIZATION CHECK */
+
+console.log("[ORO VOICE] Initialized:", {
     startRecording: typeof window.startRecording,
+    stopRecording: typeof window.stopRecording,
+    handleSendVoiceMessage:
+        typeof window.handleSendVoiceMessage,
+    cancelRecording: typeof window.cancelRecording,
     mediaDevices: !!navigator.mediaDevices,
     getUserMedia: !!navigator.mediaDevices?.getUserMedia,
     MediaRecorder: typeof window.MediaRecorder,
@@ -21442,39 +22082,6 @@ let recordSeconds = 0;
 
 })();
 // SEND VOICE BUTTON
-document.addEventListener("click", function(event) {
-    
-    if (event.target.closest("#send-voice-message-btn")) {
-        event.preventDefault();
-        window.handleSendVoiceMessage();
-    }
-    
-    if (event.target.closest("#cancel-voice-preview-btn")) {
-        event.preventDefault();
-        
-        const voice = window.__ORO_VOICE__;
-        const preview = document.getElementById("voice-preview");
-        const audio = document.getElementById("voice-preview-audio");
-        
-        if (audio) {
-            audio.pause();
-            
-            if (audio.dataset.objectUrl) {
-                URL.revokeObjectURL(audio.dataset.objectUrl);
-                delete audio.dataset.objectUrl;
-            }
-            
-            audio.removeAttribute("src");
-            audio.load();
-        }
-        
-        if (preview) preview.style.display = "none";
-        
-        if (voice) voice.audioBlob = null;
-    }
-    
-});
-
 
 window.showPage = function(id) {
     if (typeof id !== "string" || !id.trim()) {
@@ -27039,11 +27646,20 @@ window.updateFullProfile = async function () {
                     upsert: false
                 });
 
-            if (error) {
-                throw new Error(
-                    "Supabase upload: " + error.message
-                );
-            }
+           if (error) {
+    console.error("[ORO PROFILE UPLOAD ERROR]", {
+        message: error.message,
+        name: error.name,
+        statusCode: error.statusCode,
+        error: error.error,
+        details: error.details,
+        hint: error.hint
+    });
+    
+    throw new Error(
+        `Supabase upload (${error.statusCode || error.name || "unknown"}): ${error.message}`
+    );
+}
 
             if (!data?.path) {
                 throw new Error(
@@ -27985,7 +28601,51 @@ window.previewMedia = (event) => {
    ORO-CONNECT ADAPTIVE IMAGE COMPRESSION
    Network-aware: 2G - 5G+
 ========================================== */
+/* ORO-CONNECT — IMAGE UPLOAD COMPRESSION */
 
+window.prepareOROImageUpload = async function (file) {
+
+    if (!(file instanceof File)) {
+        throw new Error("Image file sirrii miti.");
+    }
+
+    if (!file.type.startsWith("image/")) {
+        throw new Error("Image file qofa upload godhi.");
+    }
+
+    const maxSize = 20 * 1024 * 1024;
+
+    if (file.size > maxSize) {
+        throw new Error("Image 20MB ol ta'uu hin qabu.");
+    }
+
+    // GIF fi SVG original isaanii eegu
+    if (
+        file.type === "image/gif" ||
+        file.type === "image/svg+xml"
+    ) {
+        return file;
+    }
+
+    if (typeof window.compressImage !== "function") {
+        return file;
+    }
+
+    const originalFile = file;
+
+    const compressedFile = await window.compressImage(file);
+
+    if (!(compressedFile instanceof Blob)) {
+        return originalFile;
+    }
+
+    // Compressed file original caalaa guddaa yoo ta'e
+    if (compressedFile.size >= originalFile.size) {
+        return originalFile;
+    }
+
+    return compressedFile;
+};
 window.compressImage = async function (file) {
 
     "use strict";
@@ -28321,6 +28981,76 @@ document.getElementById('media-upload').onchange = (e) => {
         reader.readAsDataURL(file);
     }
 };
+/* ORO-CONNECT — NETWORK DETECTION */
+
+window.getORONetworkTier = function () {
+
+    const connection =
+        navigator.connection ||
+        navigator.mozConnection ||
+        navigator.webkitConnection;
+
+    if (!navigator.onLine) return "offline";
+
+    if (!connection) return "medium";
+
+    const type = connection.effectiveType || "";
+    const downlink = Number(connection.downlink) || 0;
+    const rtt = Number(connection.rtt) || 0;
+
+    if (
+        type === "slow-2g" ||
+        type === "2g" ||
+        (downlink > 0 && downlink < 0.15) ||
+        rtt > 1500
+    ) return "low";
+
+    if (
+        type === "3g" ||
+        (downlink > 0 && downlink < 1.5) ||
+        rtt > 700
+    ) return "medium";
+
+    if (
+        type === "4g" ||
+        downlink >= 1.5
+    ) return downlink >= 10 ? "very-high" : "high";
+
+    return "medium";
+};
+
+/* NETWORK CHANGE DETECTION */
+
+window.addEventListener("online", () => {
+    window.dispatchEvent(
+        new CustomEvent("oro:network-changed", {
+            detail: { tier: window.getORONetworkTier() }
+        })
+    );
+});
+
+window.addEventListener("offline", () => {
+    window.dispatchEvent(
+        new CustomEvent("oro:network-changed", {
+            detail: { tier: "offline" }
+        })
+    );
+});
+
+const oroConnection =
+    navigator.connection ||
+    navigator.mozConnection ||
+    navigator.webkitConnection;
+
+if (oroConnection) {
+    oroConnection.addEventListener("change", () => {
+        window.dispatchEvent(
+            new CustomEvent("oro:network-changed", {
+                detail: { tier: window.getORONetworkTier() }
+            })
+        );
+    });
+}
 window.initORODataSaver = function () {
 
     const STORAGE_KEY = "oro_data_saver";
@@ -30638,76 +31368,120 @@ window.addComment = async function(postId, text, parentCommentId = null) {
 
         });
 
-        // COMMENT / REPLY NOTIFICATION
-        const target = parentId && parentOwnerId
-            ? parentOwnerId
-            : postOwnerId;
+        // ================================================
+// ORO-CONNECT PRODUCTION COMMENT / REPLY NOTIFICATION
+// ================================================
 
-        if (
-            target &&
-            target !== user.uid &&
-            auth.currentUser?.uid === user.uid &&
-            typeof setDoc === "function"
-        ) {
+const notificationType = parentId
+    ? "reply"
+    : "comment";
 
-            try {
+const target = parentId
+    ? parentOwnerId
+    : postOwnerId;
 
-                const notificationType = parentId
-                    ? "reply"
-                    : "comment";
+if (
+    target &&
+    target !== user.uid &&
+    auth.currentUser?.uid === user.uid
+) {
 
-                await setDoc(
-                    doc(
-                        db,
-                        "notifications",
-                        `${target}_${pid}_${commentId}`
-                    ),
-                    {
-                        toUserId: target,
-                        fromUserId: user.uid,
+    try {
 
-                        fromUserName: String(
-                            user.displayName ||
-                            "Fayyadamaa ORO"
-                        ).slice(0, 100),
+        const notificationId =
+            `${target}_${pid}_${commentId}`;
 
-                        fromUserPic: String(
-                            user.photoURL || ""
-                        ).slice(0, 1000),
+        const notificationRef = doc(
+            db,
+            "notifications",
+            notificationId
+        );
 
-                        type: notificationType,
+        // SENDER PROFILE
+        const senderSnapshot = await getDoc(
+            doc(db, "users", user.uid)
+        );
 
-                        text: notificationType === "reply"
-                            ? "Yaada kee irratti deebii kenneera."
-                            : "Postii kee irratti yaada kenneera.",
-
-                        textSnippet: commentText.slice(0, 100),
-
-                        postId: pid,
-                        commentId: commentId,
-                        parentCommentId: parentId,
-
-                        link: `post:${pid}`,
-
-                        seen: false,
-                        read: false,
-                        status: "unread",
-
-                        createdAt: serverTimestamp(),
-                        time: serverTimestamp()
-                    },
-                    { merge: true }
-                );
-
-            } catch (e) {
-
-                console.warn(
-                    "[ORO-NOTIFICATION] Comment notification failed:",
-                    e
-                );
-            }
+        if (auth.currentUser?.uid !== user.uid) {
+            return commentId;
         }
 
+        const senderProfile = senderSnapshot.exists()
+            ? senderSnapshot.data()
+            : {};
+
+        const senderName = String(
+            senderProfile.userName ||
+            senderProfile.name ||
+            user.displayName ||
+            "Fayyadamaa ORO"
+        ).slice(0, 100);
+
+        const senderPhoto = String(
+            senderProfile.userPic ||
+            senderProfile.photoURL ||
+            user.photoURL ||
+            NOTIF_DEFAULT_AVATAR
+        ).slice(0, 1000);
+
+        // CREATE NOTIFICATION
+        await setDoc(
+            notificationRef,
+            {
+
+                toUserId: target,
+
+                fromUserId: user.uid,
+
+                fromUserName: senderName,
+
+                fromUserPic: senderPhoto,
+
+                type: notificationType,
+
+                text: notificationType === "reply"
+                    ? "Yaada kee irratti deebii kenneera."
+                    : "Postii kee irratti yaada kenneera.",
+
+                textSnippet: commentText.slice(0, 100),
+
+                postId: pid,
+
+                commentId: commentId,
+
+                parentCommentId: parentId,
+
+                link: `post:${pid}`,
+
+                seen: false,
+
+                read: false,
+
+                status: "unread",
+
+                createdAt: serverTimestamp(),
+
+                time: serverTimestamp()
+
+            },
+            { merge: false }
+        );
+
+        console.info(
+            "[ORO-NOTIFICATION] Created:",
+            notificationType
+        );
+
+    } catch (error) {
+
+        console.warn(
+            "[ORO-NOTIFICATION] Comment notification failed:",
+            error
+        );
+
+    }
+
+}
         return commentId;
 
     } catch (error) {
@@ -30974,7 +31748,12 @@ window.sharePost = async (postId) => {
             if (!postSnap.exists()) return;
             
             const postData = postSnap.data();
-            const ownerId = postData.userId;
+            const ownerId = String(
+    postData.userId ||
+    postData.uid ||
+    postData.authorId ||
+    ""
+).trim();
             
             // Ofii isaatiif notification hin ergin.
             if (!ownerId || ownerId === user.uid) return;
@@ -31422,12 +32201,14 @@ window.followUser = async (targetUid) => {
     return window.toggleFollow(targetUid);
 };
 window.deleteMessage = async (chatId, messageId) => {
-    if (!chatId || !messageId || !auth.currentUser) {
+    const user = auth.currentUser;
+    
+    if (!user || !chatId || !messageId) {
         alert("Odeeffannoon ergaa guutuu miti.");
         return false;
     }
     
-    if (!confirm("Ergaa kana haquu ni barbaaddaa?")) {
+    if (!confirm("Ergaa kana nama hundaaf haquu barbaaddaa?")) {
         return false;
     }
     
@@ -31440,29 +32221,36 @@ window.deleteMessage = async (chatId, messageId) => {
             messageId
         );
         
-        // 1. Ergaa haquu
-        await deleteDoc(messageRef);
+        const messageSnap = await getDoc(messageRef);
         
-        console.log("[ORO-MESSAGE] Ergaan haqame.");
-        
-        // 2. Last message update gochuu
-        try {
-            await updateDoc(
-                doc(db, "last_messages", chatId),
-                {
-                    lastMessage: "🗑️ Ergaan kun haqameera",
-                    lastMessageAt: serverTimestamp(),
-                    lastSenderId: auth.currentUser.uid,
-                    lastMessageType: "deleted",
-                    updatedAt: serverTimestamp()
-                }
-            );
-        } catch (previewError) {
-            console.error(
-                "[ORO-MESSAGE] Last message update failed:",
-                previewError
-            );
+        if (!messageSnap.exists()) {
+            alert("Ergaan kun hin jiru.");
+            return false;
         }
+        
+        const message = messageSnap.data();
+        
+        // Ergaa ofii kee qofa haquu dandeessa.
+        if (message.senderId !== user.uid) {
+            alert("Ergaa nama biraa haquu hin dandeessu.");
+            return false;
+        }
+        
+        if (message.deletedForEveryone === true) {
+            return true;
+        }
+        
+        await updateDoc(messageRef, {
+            deletedForEveryone: true,
+            deletedBy: user.uid,
+            deletedAt: serverTimestamp(),
+            text: "",
+            mediaUrl: "",
+            audioUrl: "",
+            updatedAt: serverTimestamp()
+        });
+        
+        console.log("[ORO-MESSAGE] Message deleted for everyone.");
         
         return true;
         
@@ -31471,8 +32259,8 @@ window.deleteMessage = async (chatId, messageId) => {
         
         alert(
             error.code === "permission-denied" ?
-            "Ergaa kana haquuf hayyamni hin jiru. Ergaa ofii kee qofa haquu dandeessa." :
-            "Ergaa haquun hin danda'amne."
+            "Ergaa kana haquuf hayyamni hin jiru." :
+            "Ergaa haquun hin milkoofne."
         );
         
         return false;
@@ -31642,23 +32430,39 @@ window.loadMessages = function (targetUid, targetName) {
 
         box.dataset.chatEventsInitialized = "true";
 
-        box.addEventListener("click", function (event) {
-
-            const deleteBtn = event.target.closest("[data-delete-message]");
-
-            if (!deleteBtn) return;
-
-            const messageId = deleteBtn.dataset.deleteMessage;
-            const messageChatId = deleteBtn.dataset.chatId;
-
-            if (
-                messageId &&
-                messageChatId &&
-                typeof window.deleteMessage === "function"
-            ) {
-                window.deleteMessage(messageChatId, messageId);
-            }
-        });
+       box.addEventListener("click", function(event) {
+    
+    // DELETE MESSAGE
+    const deleteBtn = event.target.closest(
+        "[data-delete-message]"
+    );
+    
+    if (deleteBtn) {
+        const messageId = deleteBtn.dataset.deleteMessage;
+        const messageChatId = deleteBtn.dataset.chatId;
+        
+        if (messageId && messageChatId) {
+            window.deleteMessage(messageChatId, messageId);
+        }
+        
+        return;
+    }
+    
+    // EDIT MESSAGE
+    const editBtn = event.target.closest(
+        "[data-edit-message]"
+    );
+    
+    if (editBtn) {
+        const messageId = editBtn.dataset.editMessage;
+        const messageChatId = editBtn.dataset.chatId;
+        
+        if (messageId && messageChatId) {
+            window.editMessage(messageChatId, messageId);
+        }
+    }
+    
+});
     }
 
     // Firestore messages query
@@ -31704,59 +32508,45 @@ window.loadMessages = function (targetUid, targetName) {
                 // =====================================
 
                 let content = "";
+const mediaUrl = message.mediaUrl || message.audioUrl || "";
 
-                const mediaUrl = message.mediaUrl || message.audioUrl || "";
+// Deleted message
+if (message.deletedForEveryone === true) {
+    content = `
+        <span style="
+            opacity:.65;
+            font-style:italic;
+        ">
+            🚫 Ergaan kun haqameera.
+        </span>
+    `;
+}
 
-                // 1. VOICE MESSAGE
-                // Check voice before text because voice
-                // messages also contain a text label.
-                if (
+// 1. VOICE MESSAGE
+else if (
     message.type === "voice" ||
     message.type === "audio" ||
-    (
-        message.audioUrl &&
-        !message.type
-    )
-                ) {
-
-                    if (mediaUrl) {
-
-                        content = `
-                            <div
-                                class="voice-message-player"
-                                style="
-                                    width:230px;
-                                    max-width:100%;
-                                    padding:4px 0;
-                                "
-                            >
-                                <audio
-                                    controls
-                                    preload="metadata"
-                                    src="${esc(mediaUrl)}"
-                                    style="
-                                        width:100%;
-                                        max-width:230px;
-                                        height:42px;
-                                    "
-                                >
-                                    Browser kee audio playback
-                                    hin deeggaru.
-                                </audio>
-                            </div>
-                        `;
-
-                    } else {
-
-                        content = `
-                            <span style="color:#ffcc66;">
-                                ⚠️ Sagaleen hin argamne.
-                            </span>
-                        `;
-                    }
-
-                }
-
+    (message.audioUrl && !message.type)
+) {
+    if (mediaUrl) {
+        content = `
+            <div class="voice-message-player">
+                <audio
+                    controls
+                    preload="metadata"
+                    src="${esc(mediaUrl)}"
+                    style="width:100%;max-width:230px;"
+                ></audio>
+            </div>
+        `;
+    } else {
+        content = `
+            <span style="color:#ffcc66;">
+                ⚠️ Sagaleen hin argamne.
+            </span>
+        `;
+    }
+}
                 // 2. IMAGE MESSAGE
                 else if (
                     message.type === "image" &&
@@ -31889,28 +32679,47 @@ window.loadMessages = function (targetUid, targetName) {
                                 ${esc(time)}
                             </small>
 
-                            ${
-                                mine
-                                    ? `
-                                        <button
-                                            type="button"
-                                            data-delete-message="${esc(messageId)}"
-                                            data-chat-id="${esc(chatId)}"
-                                            style="
-                                                cursor:pointer;
-                                                color:#ff4d4d;
-                                                font-size:11px;
-                                                font-weight:bold;
-                                                margin-left:8px;
-                                                background:none;
-                                                border:0;
-                                            "
-                                        >
-                                            🗑️ Haqi
-                                        </button>
-                                    `
-                                    : ""
-                            }
+                          ${
+    mine && message.deletedForEveryone !== true
+        ? `
+            ${
+                message.type === "text"
+                    ? `
+                        <button
+                            type="button"
+                            data-edit-message="${esc(messageId)}"
+                            data-chat-id="${esc(chatId)}"
+                            style="
+                                cursor:pointer;
+                                color:#8ecbff;
+                                background:none;
+                                border:0;
+                                font-size:11px;
+                            "
+                        >
+                            ✏️ Gulaali
+                        </button>
+                    `
+                    : ""
+            }
+
+            <button
+                type="button"
+                data-delete-message="${esc(messageId)}"
+                data-chat-id="${esc(chatId)}"
+                style="
+                    cursor:pointer;
+                    color:#ff4d4d;
+                    background:none;
+                    border:0;
+                    font-size:11px;
+                "
+            >
+                🗑️ Haqi
+            </button>
+        `
+        : ""
+}
 
                         </div>
 
@@ -33525,14 +34334,30 @@ await navigator.serviceWorker.ready;
              * users/{uid}/private/fcm
              */
 
-            await setDoc(
-                doc(db, "users", uid, "private", "fcm"),
-                {
-                    fcmToken: token,
-                    lastTokenUpdate: serverTimestamp()
-                },
-                { merge: true }
-            );
+          // FCM token device tokkoof document addaa.
+const tokenRef = doc(
+    db,
+    "users",
+    uid,
+    "private",
+    "fcm",
+    "tokens",
+    token
+);
+
+await setDoc(
+    tokenRef,
+    {
+        fcmToken: token,
+        platform: "web",
+        userAgent: navigator.userAgent,
+        lastTokenUpdate: serverTimestamp(),
+        active: true
+    },
+    {
+        merge: true
+    }
+);
 
             if (auth.currentUser?.uid !== uid) return;
 
@@ -33579,25 +34404,38 @@ notifState.foregroundUnsubscribe = onMessage(
             return;
         }
         
-        // Beeksisa idilee.
-        const title =
-            payload?.notification?.title ||
-            data.title ||
-            "ORO-CONNECT";
-        
-        const body =
-            payload?.notification?.body ||
-            data.body ||
-            "Beeksisa haaraa qabda.";
-        
-        if (typeof window.showToast === "function") {
-            
-            window.showToast(`${title}: ${body}`);
-            
-        } else {
-            
-            console.info("[ORO-FCM]", title, body);
-        }
+        // // Beeksisa idilee
+
+const type = String(data.type || "");
+
+const title =
+    payload?.notification?.title ||
+    data.title ||
+    "ORO-CONNECT";
+
+const body =
+    payload?.notification?.body ||
+    data.body ||
+    "Beeksisa haaraa qabda.";
+
+// Notification settings filter
+if (!window.isORONotificationAllowed(type)) {
+    console.info(
+        "[ORO-FCM] Notification settings irratti hundaa'uun dhorkame:",
+        type
+    );
+    return;
+}
+
+// Toast notification agarsiisi
+if (typeof window.showToast === "function") {
+    
+    window.showToast(`${title}: ${body}`);
+    
+} else {
+    
+    console.info("[ORO-FCM]", title, body);
+}
     }
     
 );
@@ -33638,6 +34476,598 @@ notifState.foregroundHandler = true;
         }
     }
 };
+/* =========================================
+   ORO-CONNECT NOTIFICATION SETTINGS ENGINE
+========================================= */
+
+/* =========================================
+   ORO-CONNECT NOTIFICATION SETTINGS ENGINE
+========================================= */
+
+window.ORO_NOTIFICATION_DEFAULTS = {
+    likes: true,
+    comments: true,
+    messages: true,
+    calls: true,
+    mentions: true,
+    shares: true,
+    push: true,
+    sound: true,
+    
+    dnd: false,
+    dndStart: "22:00",
+    dndEnd: "07:00"
+};
+
+window.oroNotificationSettings = {
+    ...window.ORO_NOTIFICATION_DEFAULTS
+};
+/* =========================================
+   ORO-CONNECT — PRODUCTION DND ENGINE
+========================================= */
+
+window.isORODoNotDisturbActive = function () {
+    const settings = window.oroNotificationSettings || {};
+
+    if (settings.dnd !== true) {
+        return false;
+    }
+
+    const start = settings.dndStart || "22:00";
+    const end = settings.dndEnd || "07:00";
+
+    const validTime = value =>
+        typeof value === "string" &&
+        /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+
+    if (!validTime(start) || !validTime(end)) {
+        console.warn("[ORO-DND] DND time sirrii miti.");
+        return false;
+    }
+
+    // Sa'aatii timezone fayyadamaa irratti hundaa'i.
+    let hour;
+    let minute;
+
+    try {
+        const timezone =
+            settings.timezone ||
+            Intl.DateTimeFormat().resolvedOptions().timeZone ||
+            "Africa/Addis_Ababa";
+
+        const parts = new Intl.DateTimeFormat("en-GB", {
+            timeZone: timezone,
+            hour: "2-digit",
+            minute: "2-digit",
+            hourCycle: "h23"
+        }).formatToParts(new Date());
+
+        hour = Number(parts.find(p => p.type === "hour")?.value);
+        minute = Number(parts.find(p => p.type === "minute")?.value);
+
+    } catch (error) {
+        console.warn("[ORO-DND] Timezone fallback:", error);
+
+        const now = new Date();
+        hour = now.getHours();
+        minute = now.getMinutes();
+    }
+
+    const current = hour * 60 + minute;
+
+    const [startHour, startMinute] = start.split(":").map(Number);
+    const [endHour, endMinute] = end.split(":").map(Number);
+
+    const startTime = startHour * 60 + startMinute;
+    const endTime = endHour * 60 + endMinute;
+
+    // Yeroon jalqabaa fi xumuraa walqixa yoo ta'e DND hin hojjatu.
+    if (startTime === endTime) {
+        return false;
+    }
+
+    // DND halkan keessa darbu.
+    if (startTime > endTime) {
+        return current >= startTime || current < endTime;
+    }
+
+    // DND guyyaa keessatti.
+    return current >= startTime && current < endTime;
+};
+/* =========================================
+   ORO-CONNECT NOTIFICATION FILTER
+========================================= */
+
+/* =========================================
+   ORO-CONNECT — NOTIFICATION FILTER
+   PRODUCTION VERSION
+========================================= */
+
+window.isORONotificationAllowed = function(type) {
+    
+    const settings = window.oroNotificationSettings || {};
+    
+    type = String(type || "").toLowerCase().trim();
+    
+    if (!type) return false;
+    
+    // Push notification cufameera.
+    if (settings.push === false) {
+        return false;
+    }
+    
+    // Do Not Disturb.
+    if (window.isORODoNotDisturbActive()) {
+        return false;
+    }
+    
+    const allowedTypes = {
+        
+        // Social notifications
+        like: "likes",
+        reaction_like: "likes",
+        reaction_heart: "likes",
+        reaction_love: "likes",
+        reaction_haha: "likes",
+        reaction_wow: "likes",
+        reaction_sad: "likes",
+        reaction_angry: "likes",
+        reaction_care: "likes",
+        
+        comment: "comments",
+        reply: "comments",
+        
+        // Messaging
+        message: "messages",
+        new_voice_message: "messages",
+        
+        // Calls
+        call: "calls",
+        incoming_call: "calls",
+        
+        // Other
+        mention: "mentions",
+        share: "shares"
+    };
+    
+    const settingKey = allowedTypes[type];
+    
+    // Type hin beekamne yoo ta'e hin dhorkin.
+    if (!settingKey) {
+        return true;
+    }
+    
+    return settings[settingKey] !== false;
+};
+/* =========================================
+   ORO-CONNECT — LOAD NOTIFICATION SETTINGS
+========================================= */
+
+window.loadORONotificationSettings = async function() {
+    
+    const user = auth.currentUser;
+    
+    if (!user) return false;
+    
+    try {
+        
+        const settingsRef = doc(
+            db,
+            "users",
+            user.uid,
+            "settings",
+            "notifications"
+        );
+        
+        const snap = await getDoc(settingsRef);
+        
+        // Account jijjiirameera yoo ta'e dhaabi.
+        if (auth.currentUser?.uid !== user.uid) {
+            return false;
+        }
+        
+        const savedSettings = snap.exists() ?
+            snap.data() :
+            {};
+        
+        // Settings sirrii qofa fudhadhu.
+        const defaults = window.ORO_NOTIFICATION_DEFAULTS;
+        
+        const loadedSettings = {
+            ...defaults
+        };
+        
+        const booleanKeys = [
+            "likes",
+            "comments",
+            "messages",
+            "calls",
+            "mentions",
+            "shares",
+            "push",
+            "sound",
+            "dnd"
+        ];
+        
+        booleanKeys.forEach(key => {
+            
+            if (typeof savedSettings[key] === "boolean") {
+                loadedSettings[key] = savedSettings[key];
+            }
+            
+        });
+        
+        const validTime = value =>
+            typeof value === "string" &&
+            /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+        
+        if (validTime(savedSettings.dndStart)) {
+            loadedSettings.dndStart = savedSettings.dndStart;
+        }
+        
+        if (validTime(savedSettings.dndEnd)) {
+            loadedSettings.dndEnd = savedSettings.dndEnd;
+        }
+        
+        if (
+            typeof savedSettings.timezone === "string" &&
+            savedSettings.timezone.length <= 100
+        ) {
+            loadedSettings.timezone = savedSettings.timezone;
+        }
+        
+        // Global state update.
+        window.oroNotificationSettings = loadedSettings;
+        
+        // UI update.
+        Object.entries(loadedSettings).forEach(
+            ([key, value]) => {
+                
+                const element = document.getElementById(
+                    "notif-" + key.replace(
+                        /[A-Z]/g,
+                        letter => "-" + letter.toLowerCase()
+                    )
+                );
+                
+                if (!element) return;
+                
+                if (element.type === "checkbox") {
+                    element.checked = value === true;
+                } else {
+                    element.value = value;
+                }
+                
+            }
+        );
+        
+        console.info(
+            "[ORO-NOTIFICATION] Settings loaded successfully."
+        );
+        
+        return true;
+        
+    } catch (error) {
+        
+        console.error(
+            "[ORO-NOTIFICATION] Settings load failed:",
+            error
+        );
+        
+        return false;
+    }
+};
+/* =========================================
+   ORO-CONNECT
+   NOTIFICATION SETTINGS — PRODUCTION
+========================================= */
+
+window.saveORONotificationSettings = async function () {
+
+    const user = auth.currentUser;
+
+    if (!user) {
+        console.warn(
+            "[ORO-NOTIFICATION] User authenticated miti."
+        );
+        return false;
+    }
+
+    const uid = user.uid;
+
+    const status = document.getElementById(
+        "notification-settings-status"
+    );
+
+    const saveButton = document.getElementById(
+        "save-notification-settings"
+    );
+
+    // Prevent duplicate submissions.
+    if (
+        saveButton &&
+        saveButton.disabled
+    ) {
+        return false;
+    }
+
+    const setStatus = (message, type = "info") => {
+
+        if (!status) return;
+
+        status.textContent = message;
+
+        status.dataset.state = type;
+
+    };
+
+    const keys = [
+        "likes",
+        "comments",
+        "messages",
+        "calls",
+        "mentions",
+        "shares",
+        "push",
+        "sound",
+        "dnd"
+    ];
+
+   const defaultSettings =
+    window.ORO_NOTIFICATION_DEFAULTS || {};
+
+    const settings = {};
+
+    try {
+
+        // ---------------------------------
+        // 1. Read and validate checkbox data
+        // ---------------------------------
+
+        for (const key of keys) {
+
+            const element = document.getElementById(
+                "notif-" + key
+            );
+
+            const fallback =
+                typeof defaultSettings[key] === "boolean"
+                    ? defaultSettings[key]
+                    : true;
+
+            if (element) {
+
+                if (element.type !== "checkbox") {
+                    throw new Error(
+                        `Invalid notification input: ${key}`
+                    );
+                }
+
+                settings[key] = element.checked;
+
+            } else {
+
+                settings[key] = fallback;
+
+            }
+
+        }
+
+        // ---------------------------------
+        // 2. Read DND schedule
+        // ---------------------------------
+
+        settings.dndStart =
+            document.getElementById(
+                "notif-dnd-start"
+            )?.value || "22:00";
+
+        settings.dndEnd =
+            document.getElementById(
+                "notif-dnd-end"
+            )?.value || "07:00";
+
+        // ---------------------------------
+        // 3. Validate time format
+        // ---------------------------------
+
+        const validTime = value =>
+            typeof value === "string" &&
+            /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
+
+        if (
+            !validTime(settings.dndStart) ||
+            !validTime(settings.dndEnd)
+        ) {
+
+            setStatus(
+                "Yeroon DND sirrii miti. Sa'aatii sirreessi.",
+                "error"
+            );
+
+            return false;
+
+        }
+
+        // ---------------------------------
+        // 4. Validate boolean values
+        // ---------------------------------
+
+        for (const key of keys) {
+
+            if (typeof settings[key] !== "boolean") {
+                throw new Error(
+                    `Invalid setting value: ${key}`
+                );
+            }
+
+        }
+
+        // ---------------------------------
+        // 5. Save user's timezone
+        // ---------------------------------
+
+        settings.timezone =
+            Intl.DateTimeFormat()
+                .resolvedOptions()
+                .timeZone || "Africa/Addis_Ababa";
+
+        // ---------------------------------
+        // 6. Prevent account switching issue
+        // ---------------------------------
+
+        if (
+            !auth.currentUser ||
+            auth.currentUser.uid !== uid
+        ) {
+
+            setStatus(
+                "Account jijjiirameera. Irra deebi'i.",
+                "error"
+            );
+
+            return false;
+
+        }
+
+        // ---------------------------------
+        // 7. Disable save button
+        // ---------------------------------
+
+        if (saveButton) {
+            saveButton.disabled = true;
+            saveButton.setAttribute(
+                "aria-busy",
+                "true"
+            );
+        }
+
+        setStatus(
+            "Notification Settings olkaa'aa jira...",
+            "loading"
+        );
+
+        // ---------------------------------
+        // 8. Save to Firestore
+        // ---------------------------------
+
+        const settingsRef = doc(
+            db,
+            "users",
+            uid,
+            "settings",
+            "notifications"
+        );
+
+        await setDoc(
+            settingsRef,
+            {
+                ...settings,
+
+                updatedAt: serverTimestamp()
+
+            },
+            {
+                merge: true
+            }
+        );
+
+        // ---------------------------------
+        // 9. Verify current account
+        // ---------------------------------
+
+        if (
+            !auth.currentUser ||
+            auth.currentUser.uid !== uid
+        ) {
+
+            console.warn(
+                "[ORO-NOTIFICATION] Account changed during save."
+            );
+
+            return false;
+
+        }
+
+        // ---------------------------------
+        // 10. Update local settings
+        // ---------------------------------
+
+        window.oroNotificationSettings = {
+    ...window.ORO_NOTIFICATION_DEFAULTS,
+    ...settings
+};
+
+        // ---------------------------------
+        // 11. Success message
+        // ---------------------------------
+
+        setStatus(
+            "Notification Settings milkaa'inaan olkaa'ameera.",
+            "success"
+        );
+
+        console.info(
+            "[ORO-NOTIFICATION] Settings saved successfully."
+        );
+
+        return true;
+
+    } catch (error) {
+
+        console.error(
+            "[ORO-NOTIFICATION] Settings save failed:",
+            error
+        );
+
+        setStatus(
+            "Settings olkaa'uun hin milkoofne. Network fi Firebase ilaali.",
+            "error"
+        );
+
+        return false;
+
+    } finally {
+
+        // ---------------------------------
+        // 12. Restore button state
+        // ---------------------------------
+
+        if (saveButton) {
+
+            saveButton.disabled = false;
+
+            saveButton.removeAttribute(
+                "aria-busy"
+            );
+
+        }
+
+    }
+
+};
+
+
+/* =========================================
+   SAVE BUTTON EVENT
+========================================= */
+
+const notificationSaveButton =
+    document.getElementById(
+        "save-notification-settings"
+    );
+
+if (notificationSaveButton) {
+
+    notificationSaveButton.onclick =
+        window.saveORONotificationSettings;
+
+}
+/* =========================================
+   ORO-CONNECT DO NOT DISTURB
+========================================= */
+
+/* ORO-CONNECT — DO NOT DISTURB CHECK */
 
 /* ORO-CONNECT — ENABLE NOTIFICATIONS */
 
@@ -33650,15 +35080,18 @@ window.enableORONotifications = async () => {
         return false;
     }
     
-    // Browser support.
-    if (!("Notification" in window)) {
+    // Browser support
+    if (
+        !("Notification" in window) ||
+        !("serviceWorker" in navigator)
+    ) {
         console.warn(
-            "[ORO-FCM] Notification API hin deeggaramu. Chrome fayyadami."
+            "[ORO-FCM] Browser Notification hin deeggaru."
         );
         return false;
     }
     
-    // Secure context.
+    // Secure context
     if (!window.isSecureContext) {
         console.warn(
             "[ORO-FCM] HTTPS ykn localhost barbaachisa."
@@ -33668,7 +35101,12 @@ window.enableORONotifications = async () => {
     
     try {
         
-        const permission = await Notification.requestPermission();
+        let permission = Notification.permission;
+        
+        // Permission gaafachuu
+        if (permission === "default") {
+            permission = await Notification.requestPermission();
+        }
         
         if (permission !== "granted") {
             console.warn(
@@ -33677,22 +35115,26 @@ window.enableORONotifications = async () => {
             return false;
         }
         
-        if (auth.currentUser?.uid !== user.uid) return false;
-        
-        const result = await window.setupNotifications(user.uid);
-        
-        if (result === true) {
-            
-            window.showToast?.("Notification eeyyamameera!");
-            
-            return true;
+        // Account mirkaneessi
+        if (auth.currentUser?.uid !== user.uid) {
+            return false;
         }
         
-        console.warn(
-            "[ORO-FCM] Notification setup hin milkoofne."
+        // Notification setup
+        const result = await window.setupNotifications(user.uid);
+        
+        if (result !== true) {
+            console.warn(
+                "[ORO-FCM] Notification setup hin milkoofne."
+            );
+            return false;
+        }
+        
+        window.showToast?.(
+            "Notification eeyyamameera!"
         );
         
-        return false;
+        return true;
         
     } catch (error) {
         
@@ -33773,8 +35215,9 @@ window.sendNotification = async function(
     type,
     postData = null
 ) {
+
     const user = auth.currentUser;
-    
+
     if (
         !user ||
         typeof toUserId !== "string" ||
@@ -33783,227 +35226,428 @@ window.sendNotification = async function(
     ) {
         return false;
     }
-    
+
     const uid = user.uid;
     toUserId = toUserId.trim();
-    
+
+    // ==========================================
+    // NOTIFICATION MESSAGES
+    // ==========================================
+
     const messages = {
+
         like: "postii kee irratti jaalala argisiiseera.",
+
         comment: "postii kee irratti yaada kenneera.",
+
         share: "postii kee qooddeera.",
+
         follow: "si hordofuu jalqabeera.",
+
         message: "ergaa haaraa siif ergeera.",
+
         new_voice_message: "ergaa sagalee haaraa siif ergeera.",
+
         reply: "yaada kee irratti deebii kenneera.",
+
         mention: "si caqaseera.",
-        incoming_call: "bilbila siif bilbileera."
+
+        incoming_call: "bilbila siif bilbileera.",
+
+        reaction_like: "postii kee jaallateera.",
+
+        reaction_heart: "postii kee irratti jaalala argisiiseera.",
+
+        reaction_love: "postii kee baay'ee jaallateera.",
+
+        reaction_haha: "postii kee irratti kolfateera.",
+
+        reaction_wow: "postii kee irratti dinqisiifateera.",
+
+        reaction_sad: "postii kee irratti gaddasaa ibseera.",
+
+        reaction_angry: "postii kee irratti aarii ibseera.",
+
+        reaction_care: "postii kee irratti kunuunsa argisiiseera."
+
     };
-    
+
+
+    // ==========================================
+    // VALIDATE NOTIFICATION TYPE
+    // ==========================================
+
+    const isReaction =
+        typeof type === "string" &&
+        /^reaction_[a-z0-9_-]{1,30}$/i.test(type);
+
     if (
         !Object.prototype.hasOwnProperty.call(messages, type) &&
+        !isReaction &&
         type !== "unfollow"
     ) {
+        console.warn(
+            "[ORO-NOTIFICATION] Type hin beekamne:",
+            type
+        );
+
         return false;
     }
-    
+
+
+    // ==========================================
+    // NOTIFICATION TEXT
+    // ==========================================
+
+    const notificationText = messages[type] ||
+        (isReaction
+            ? "postii kee irratti reaction kenneera."
+            : "");
+
+
     try {
+
         const isSameUser = () =>
             auth.currentUser?.uid === uid;
-        
+
+
         if (!isSameUser()) return false;
-        
+
+
+        // ==========================================
         // UNFOLLOW
+        // ==========================================
+
         if (type === "unfollow") {
+
             const q = query(
                 collection(db, "notifications"),
+
                 where("fromUserId", "==", uid),
+
                 where("toUserId", "==", toUserId),
+
                 where("type", "==", "follow")
             );
-            
+
             const snapshot = await getDocs(q);
-            
+
             if (!isSameUser()) return false;
-            
-            for (let i = 0; i < snapshot.docs.length; i += 450) {
+
+            for (
+                let i = 0;
+                i < snapshot.docs.length;
+                i += 450
+            ) {
+
                 if (!isSameUser()) return false;
-                
+
                 const batch = writeBatch(db);
-                
+
                 snapshot.docs
                     .slice(i, i + 450)
-                    .forEach(item => batch.delete(item.ref));
-                
+                    .forEach(item => {
+                        batch.delete(item.ref);
+                    });
+
                 await batch.commit();
+
             }
-            
+
             return true;
+
         }
-        
-        // IDs
+
+
+        // ==========================================
+        // NOTIFICATION IDS
+        // ==========================================
+
         const postId = String(
             postData?.postId ||
             postData?.id ||
             ""
         ).trim();
-        
+
         const chatId = String(
             postData?.chatId ||
             postData?.roomId ||
             ""
         ).trim();
-        
+
         const roomID = String(
             postData?.roomID ||
             postData?.callId ||
             ""
         ).trim();
-        
+
         const callType =
-            postData?.callType === "video" ? "video" : "voice";
-        
-        if (type === "like" && !postId) {
-            console.warn("[ORO-NOTIFICATION] postId hin jiru.");
-            return false;
-        }
-        
-        if (type === "incoming_call" && !roomID) {
-            console.warn("[ORO-CALL] roomID hin jiru.");
-            return false;
-        }
-        if (type === "incoming_call") {
-    link = `call:${roomID}`;
-}
-        
-        // LINK
-        let link = "#";
-        
+            postData?.callType === "video"
+                ? "video"
+                : "voice";
+
+
+        // ==========================================
+        // VALIDATION
+        // ==========================================
+
         if (
-            ["like", "comment", "share", "reply"].includes(type) &&
-            postId
+            [
+                "like",
+                "comment",
+                "share",
+                "reply",
+                "mention"
+            ].includes(type) ||
+            isReaction
         ) {
-            link = `post:${postId}`;
+
+            if (!postId) {
+
+                console.warn(
+                    "[ORO-NOTIFICATION] postId hin jiru."
+                );
+
+                return false;
+
+            }
+
         }
-        
-        if (type === "follow") {
-            link = `user:${toUserId}`;
-        }
-        
+
+
         if (
             ["message", "new_voice_message"].includes(type) &&
-            chatId
+            !chatId
         ) {
-            link = `chat:${chatId}`;
+
+            console.warn(
+                "[ORO-NOTIFICATION] chatId hin jiru."
+            );
+
+            return false;
+
         }
-        
-        // DUPLICATE CHECK
+
+
+        if (
+            type === "incoming_call" &&
+            !roomID
+        ) {
+
+            console.warn(
+                "[ORO-CALL] roomID hin jiru."
+            );
+
+            return false;
+
+        }
+
+
+        // ==========================================
+        // NOTIFICATION LINK
+        // ==========================================
+
+        let link = "#";
+
+        if (
+            [
+                "like",
+                "comment",
+                "share",
+                "reply",
+                "mention"
+            ].includes(type) ||
+            isReaction
+        ) {
+
+            link = `post:${postId}`;
+
+        }
+
+        else if (type === "follow") {
+
+            link = `user:${toUserId}`;
+
+        }
+
+        else if (
+            ["message", "new_voice_message"].includes(type)
+        ) {
+
+            link = `chat:${chatId}`;
+
+        }
+
+        else if (type === "incoming_call") {
+
+            link = `call:${roomID}`;
+
+        }
+
+
+        // ==========================================
+        // DUPLICATE NOTIFICATION PROTECTION
+        // ==========================================
+
         if (["like", "follow"].includes(type)) {
+
             const conditions = [
+
                 where("fromUserId", "==", uid),
+
                 where("toUserId", "==", toUserId),
+
                 where("type", "==", type),
+
                 where("seen", "==", false)
+
             ];
-            
+
             if (type === "like") {
+
                 conditions.push(
                     where("postId", "==", postId)
                 );
+
             }
-            
+
             const duplicateQuery = query(
                 collection(db, "notifications"),
                 ...conditions,
                 limit(1)
             );
-            
-            const existing = await getDocs(duplicateQuery);
-            
+
+            const existing = await getDocs(
+                duplicateQuery
+            );
+
             if (!isSameUser()) return false;
+
             if (!existing.empty) return false;
+
         }
-        
+
+
+        // ==========================================
         // SENDER PROFILE
+        // ==========================================
+
         const profileSnapshot = await getDoc(
             doc(db, "users", uid)
         );
-        
+
         if (!isSameUser()) return false;
-        
-        const profile = profileSnapshot.exists() ?
-            profileSnapshot.data() :
-            {};
-        
+
+        const profile = profileSnapshot.exists()
+            ? profileSnapshot.data()
+            : {};
+
+
         const senderName = String(
             profile.userName ||
             profile.name ||
             user.displayName ||
             "Fayyadamaa ORO"
         ).slice(0, 100);
-        
+
+
         const senderPhoto = String(
             profile.userPic ||
             profile.photoURL ||
             user.photoURL ||
             NOTIF_DEFAULT_AVATAR
         ).slice(0, 1000);
-        
+
+
+        // ==========================================
         // NOTIFICATION DOCUMENT
+        // ==========================================
+
         const notification = {
+
             toUserId,
+
             fromUserId: uid,
+
             fromUserName: senderName,
+
             fromUserPic: senderPhoto,
-            
+
             type,
-            text: messages[type],
+
+            text: notificationText,
+
             link,
-            
-            postId: [
-                "like",
-                "comment",
-                "share",
-                "reply"
-            ].includes(type) ? postId || null : null,
-            
+
+            postId: (
+                [
+                    "like",
+                    "comment",
+                    "share",
+                    "reply",
+                    "mention"
+                ].includes(type) ||
+                isReaction
+            ) ? postId : null,
+
             chatId: [
                 "message",
                 "new_voice_message"
-            ].includes(type) ? chatId || null : null,
-            
-            callId: type === "incoming_call" ? roomID : null,
-            callType: type === "incoming_call" ? callType : null,
-            
+            ].includes(type)
+                ? chatId
+                : null,
+
+            callId:
+                type === "incoming_call"
+                    ? roomID
+                    : null,
+
+            callType:
+                type === "incoming_call"
+                    ? callType
+                    : null,
+
             seen: false,
+
             read: false,
+
             status: "unread",
-            
+
             createdAt: serverTimestamp()
+
         };
-        
         if (!isSameUser()) return false;
-        
+
+
+        // ==========================================
+        // SAVE NOTIFICATION
+        // ==========================================
+
         await addDoc(
             collection(db, "notifications"),
             notification
         );
-        
+
+
         console.log(
-            "[ORO-NOTIFICATION] Notification created:",
+            "[ORO-NOTIFICATION] Created:",
             type
         );
-        
+
         return true;
-        
+
+
     } catch (error) {
+
         console.error(
             "[ORO-NOTIFICATION] Send error:",
             error
         );
-        
+
         return false;
+
     }
-    
+
 };
 window.openProfileModal=async userId=>{try{const docSnap=await getDoc(doc(db,"users",userId));if(docSnap.exists()){const u=docSnap.data();document.getElementById("view-user-pic").src=u.profilePic||"https://cdn-icons-png.flaticon.com/512/149/149071.png";document.getElementById("view-user-name").innerText=u.name||"Nama User";document.getElementById("view-user-email").innerText=u.email||"-";document.getElementById("view-user-bio").innerText=u.bio||"Bio hin jiru...";document.getElementById("view-user-location").innerText=u.location||"Iccitii";document.getElementById("profile-modal").style.setProperty("display","flex","important");}}catch(err){console.error("Error opening profile modal:",err);}};
 window.closeProfileModal = () => {
